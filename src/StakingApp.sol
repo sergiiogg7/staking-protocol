@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.24;
 
-import "../lib/openzeppelin-contracts/contracts/access/Ownable.sol";
+import "../lib/openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
-contract StakingApp is Ownable {
+contract StakingApp is Ownable2Step {
     address public stakingToken;
     uint256 public stakingPeriod;
     uint256 public fixStakingAmount;

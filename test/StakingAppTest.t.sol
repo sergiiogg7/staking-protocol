@@ -15,6 +15,7 @@ contract StakingTokenTest is Test {
 
     address owner_ = vm.addr(1);
     address randomUser = vm.addr(2);
+    address newOwner = vm.addr(5);
     uint256 stakingPeriod_ = 100000000000000;
     uint256 fixedStakingAmount_ = 10;
     uint256 rewardPerPeriod_ = 1 ether;
@@ -245,5 +246,42 @@ contract StakingTokenTest is Test {
         assert(elapsedPeriod == block.timestamp);
 
         vm.stopPrank();
+    }
+
+    function testTransferOwnershipRequiresTwoSteps() external {
+        vm.startPrank(owner_);
+        stakingApp.transferOwnership(newOwner);
+        vm.stopPrank();
+
+        assert(stakingApp.owner() == owner_);
+        assert(stakingApp.pendingOwner() == newOwner);
+    }
+
+    function testAcceptOwnershipTransfersOwnership() external {
+        vm.startPrank(owner_);
+        stakingApp.transferOwnership(newOwner);
+        vm.stopPrank();
+
+        vm.prank(newOwner);
+        stakingApp.acceptOwnership();
+
+        assert(stakingApp.owner() == newOwner);
+        assert(stakingApp.pendingOwner() == address(0));
+    }
+
+    function testAcceptOwnershipShouldRevertIfNotPendingOwner() external {
+        vm.startPrank(owner_);
+        stakingApp.transferOwnership(newOwner);
+        vm.stopPrank();
+
+        vm.prank(randomUser);
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", randomUser));
+        stakingApp.acceptOwnership();
+    }
+
+    function testTransferOwnershipShouldRevertIfNotOwner() external {
+        vm.prank(randomUser);
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", randomUser));
+        stakingApp.transferOwnership(newOwner);
     }
 }
