@@ -2,7 +2,7 @@
 
 A fixed-amount staking protocol on Ethereum, written in Solidity and tested with Foundry. Users deposit a fixed amount of a staking token, lock it for a configurable period, and claim ETH rewards. The protocol is admin-managed through OpenZeppelin's `Ownable`.
 
-![CI](https://github.com/sergiiogg7/FoundryFirstRepo/actions/workflows/test.yml/badge.svg)
+![CI](https://github.com/sergiiogg7/staking-protocol/actions/workflows/test.yml/badge.svg)
 ![Solidity ^0.8.24](https://img.shields.io/badge/Solidity-%5E0.8.24-blue)
 ![Foundry](https://img.shields.io/badge/built%20with-Foundry-FF6B6B)
 ![Tests](https://img.shields.io/badge/tests-13%20passing-green)
@@ -73,8 +73,8 @@ foundryup
 ### Install dependencies
 
 ```shell
-git clone --recurse-submodules https://github.com/sergiiogg7/FoundryFirstRepo.git
-cd FoundryFirstRepo
+git clone --recurse-submodules https://github.com/sergiiogg7/staking-protocol.git
+cd staking-protocol
 ```
 
 ### Build
