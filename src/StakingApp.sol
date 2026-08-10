@@ -3,8 +3,9 @@ pragma solidity ^0.8.24;
 
 import "../lib/openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "../lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 
-contract StakingApp is Ownable2Step {
+contract StakingApp is Ownable2Step, ReentrancyGuard {
     address public stakingToken;
     uint256 public stakingPeriod;
     uint256 public fixStakingAmount;
@@ -41,7 +42,7 @@ contract StakingApp is Ownable2Step {
         emit DepositTokens(msg.sender, tokenAmountToDeposit_);
     }
 
-    function withdrawTokens() external {
+    function withdrawTokens() external nonReentrant {
         // CEI PATTERN
 
         // Check
@@ -55,7 +56,7 @@ contract StakingApp is Ownable2Step {
         emit WithdrawTokens(msg.sender, userBalance_);
     }
 
-    function claimRewards() external {
+    function claimRewards() external nonReentrant {
         //1. Check State
         require(userBalance[msg.sender] == fixStakingAmount, "Not staking");
 

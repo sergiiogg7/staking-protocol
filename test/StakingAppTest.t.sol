@@ -284,4 +284,55 @@ contract StakingTokenTest is Test {
         vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", randomUser));
         stakingApp.transferOwnership(newOwner);
     }
+
+    function testClaimRewardsShouldRevertOnReentrancy() external {
+        ReentrantAttacker attacker = new ReentrantAttacker(payable(address(stakingApp)));
+
+        uint256 tokenAmount = stakingApp.fixStakingAmount();
+        _fundUser(address(attacker), tokenAmount);
+
+        vm.startPrank(address(attacker));
+        IERC20(stakingToken).approve(address(stakingApp), tokenAmount);
+        attacker.deposit(tokenAmount);
+        vm.stopPrank();
+
+        vm.startPrank(owner_);
+        uint256 etherAmount = 100000 ether;
+        vm.deal(owner_, etherAmount);
+        (bool success,) = address(stakingApp).call{value: etherAmount}("");
+        require(success, "Test transfer failed");
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + stakingPeriod_);
+
+        vm.prank(address(attacker));
+        attacker.claim();
+
+        assertEq(attacker.lastRevertReason(), abi.encodeWithSignature("ReentrancyGuardReentrantCall()"));
+    }
+}
+
+contract ReentrantAttacker {
+    StakingApp public stakingApp;
+    bytes public lastRevertReason;
+
+    constructor(address payable stakingApp_) {
+        stakingApp = StakingApp(stakingApp_);
+    }
+
+    function deposit(uint256 amount_) external {
+        stakingApp.depositToken(amount_);
+    }
+
+    function claim() external {
+        stakingApp.claimRewards();
+    }
+
+    receive() external payable {
+        (bool success, bytes memory data) =
+            address(stakingApp).call(abi.encodeWithSignature("claimRewards()"));
+        if (!success) {
+            lastRevertReason = data;
+        }
+    }
 }
