@@ -25,13 +25,17 @@ forge script script/Deploy.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY -
 
 ## Architecture
 
-Two contracts with a clear separation of concerns:
+### Contratos actuales
+- **`src/StakingToken.sol`** — ERC20 mintable (`ERC20` + `Ownable`). Cap de 1,000,000 STK. Solo el owner puede `mint` o distribuir con `distributeTokens`.
+- **`src/StakingApp.sol`** — lógica de staking (`Ownable2Step` + `ReentrancyGuard` + `Pausable`). Deposita exactamente `fixStakingAmount` tokens, espera `stakingPeriod` segundos y reclama `rewardPerPeriod` ETH. `withdrawTokens` siempre disponible aunque esté en pause. `stakingToken`, `fixStakingAmount` y `rewardPerPeriod` son `immutable`; solo `stakingPeriod` es mutable post-deploy.
 
-- **`src/StakingToken.sol`** — mintable ERC20 (`ERC20` + `Ownable`). Hard cap of 1,000,000 STK. Only the owner can `mint` or batch-distribute via `distributeTokens`.
+### Evolución planificada (ver PLAN.md)
+- **`src/StakingNFT.sol`** — ERC-721 en desarrollo. Cada posición de staking se representa como un NFT. Solo `StakingApp` puede mint/burn. `tokenURI` generado on-chain en base64.
+- **`src/StakingApp.sol`** será refactorizado para usar `tokenId` en lugar de `userBalance` por address.
+- Invariante nueva: `totalSupply(NFT) * fixStakingAmount == tokenBalance(StakingApp)`.
 
-- **`src/StakingApp.sol`** — core staking logic (`Ownable2Step` + `ReentrancyGuard` + `Pausable`). Users deposit exactly `fixStakingAmount` tokens, wait `stakingPeriod` seconds, then call `claimRewards()` to receive `rewardPerPeriod` ETH. `withdrawTokens()` is always available even when paused. The three constructor params `stakingToken`, `fixStakingAmount`, and `rewardPerPeriod` are `immutable`; only `stakingPeriod` can be changed post-deploy via `changeStakingPeriod`.
-
-The invariant: `StakingApp`'s token balance must always be ≥ the sum of all active `userBalance` values.
+### Frontend (Fase 3)
+Stack: Next.js 16 + wagmi v2 + viem v2 + RainbowKit v2 + Tailwind v4. Tres rutas: `/` (My Position), `/activity` (event log + Chainlink ETH/USD), `/admin` (owner panel). El frontend vive en `/frontend` dentro del mismo repo.
 
 ## Testing
 
@@ -60,6 +64,25 @@ Update `.gas-snapshot` intentionally with `forge snapshot` when gas changes are 
 ## Roadmap
 
 El archivo `PLAN.md` en la raíz contiene las fases del proyecto con estado actualizado (🔲 pendiente · ⏳ en progreso · ✅ completado). Al completar cualquier tarea, actualizar el estado y añadir una fila al registro de cambios al final del archivo.
+
+## Mentoría
+
+Este proyecto tiene función de aprendizaje. Antes de implementar cualquier concepto nuevo (patrón, estándar, herramienta), explicar qué es, por qué se usa y qué problema resuelve. Razonar las decisiones de diseño. Al terminar cada fase, resumir qué habilidades se han añadido al perfil.
+
+## Principios de ingeniería
+
+- **Patrón AAA** en todos los tests: bloques `// Arrange`, `// Act`, `// Assert` explícitos y separados.
+- **Nomenclatura de tests**: `test_<función>_<escenario>_<resultado esperado>`.
+- **Custom errors con parámetros** en todos los reverts — nunca `require` con strings.
+- **CEI estricto** en cualquier función que haga transferencias externas.
+- **Sin magic numbers**: constantes siempre nombradas.
+- **Events indexados** en todos los parámetros que se filtrarán off-chain.
+- En frontend: hooks de contrato separados de componentes UI. ABIs importados con `as const`. Estado de transacción explícito en cada acción (idle → pending → confirming → success/error).
+
+## Skills disponibles
+
+- **`design-taste-frontend`** — genera UI con dirección artística real y verificación visual en navegador. Usar al inicio de la Fase 3. Instalar con: `/plugin marketplace add Leonxlnx/taste-skill`
+- **`vercel-labs/skills`** (`find-skills`) — CLI para descubrir skills relevantes por palabra clave. Útil antes de iniciar el frontend para explorar el ecosistema. Instalar con: `npx skills add vercel-labs/agent-skills --skill find-skills -a claude-code`
 
 ## Git Conventions
 
