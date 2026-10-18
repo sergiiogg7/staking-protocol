@@ -85,9 +85,6 @@ contract StakingAppInvariant is Test {
 
     // The contract's token balance must always cover all recorded deposits.
     function invariant_tokenBalanceCoversTotalDeposited() external view {
-        assertGe(
-            IERC20(address(stakingToken)).balanceOf(address(stakingApp)),
-            handler.totalDeposited()
-        );
+        assertGe(IERC20(address(stakingToken)).balanceOf(address(stakingApp)), handler.totalDeposited());
     }
 }

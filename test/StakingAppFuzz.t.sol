@@ -19,7 +19,8 @@ contract StakingAppFuzz is Test {
 
     function setUp() external {
         stakingToken = new StakingToken("Staking Token", "STK", owner_);
-        stakingApp = new StakingApp(address(stakingToken), owner_, stakingPeriod_, fixedStakingAmount_, rewardPerPeriod_);
+        stakingApp =
+            new StakingApp(address(stakingToken), owner_, stakingPeriod_, fixedStakingAmount_, rewardPerPeriod_);
     }
 
     function _fundAndApprove(address user_, uint256 amount_) internal {
@@ -53,9 +54,7 @@ contract StakingAppFuzz is Test {
         vm.warp(block.timestamp + timeElapsed_);
 
         vm.prank(randomUser);
-        vm.expectRevert(
-            abi.encodeWithSelector(StakingPeriodNotElapsed.selector, stakingPeriod_ - timeElapsed_)
-        );
+        vm.expectRevert(abi.encodeWithSelector(StakingPeriodNotElapsed.selector, stakingPeriod_ - timeElapsed_));
         stakingApp.claimRewards();
     }
 

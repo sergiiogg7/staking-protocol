@@ -27,7 +27,8 @@ contract StakingAppTest is Test {
 
     function setUp() external {
         stakingToken = new StakingToken("Staking Token", "STK", owner_);
-        stakingApp = new StakingApp(address(stakingToken), owner_, stakingPeriod_, fixedStakingAmount_, rewardPerPeriod_);
+        stakingApp =
+            new StakingApp(address(stakingToken), owner_, stakingPeriod_, fixedStakingAmount_, rewardPerPeriod_);
     }
 
     // -------------------------------------------------------------------------
