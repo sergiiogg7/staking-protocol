@@ -136,7 +136,21 @@ StakingApp   : (pendiente)
 - 🔲 Inicializar scaffold-eth 2 en `/frontend`
 - 🔲 Conectar ABIs generados por Foundry (`out/`) al frontend
 - 🔲 Configurar red Sepolia como default
-- 🔲 Instalar `design-taste-frontend` skill (`/plugin marketplace add Leonxlnx/taste-skill`) — genera UI con dirección artística real, imágenes de referencia y verificación visual en navegador (3 rondas de corrección automática)
+- 🔲 Instalar skills antes de arrancar la Fase 3:
+  ```bash
+  /plugin marketplace add Leonxlnx/taste-skill
+  npx skills add vercel-labs/agent-skills --skill react-best-practices -a claude-code
+  npx skills add vercel-labs/agent-skills --skill web-design-guidelines -a claude-code
+  npx skills add vercel-labs/agent-skills --skill composition-patterns -a claude-code
+  npx skills add vercel-labs/agent-skills --skill vercel-deploy-claimable -a claude-code
+  ```
+  | Skill | Cuándo usar |
+  |---|---|
+  | `design-taste-frontend` | Al generar cada página — dirección artística + verificación visual |
+  | `react-best-practices` | Durante todo el desarrollo frontend |
+  | `web-design-guidelines` | Al revisar el resultado de cada página |
+  | `composition-patterns` | Al diseñar componentes compartidos y panel admin |
+  | `vercel-deploy-claimable` | Al final de la fase — URL pública para recruiters |
 
 ### Ruta `/` — My Position
 
