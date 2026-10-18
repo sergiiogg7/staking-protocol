@@ -57,6 +57,10 @@ CI runs on every push and blocks merges on:
 
 Update `.gas-snapshot` intentionally with `forge snapshot` when gas changes are expected.
 
+## Roadmap
+
+El archivo `PLAN.md` en la raíz contiene las fases del proyecto con estado actualizado (🔲 pendiente · ⏳ en progreso · ✅ completado). Al completar cualquier tarea, actualizar el estado y añadir una fila al registro de cambios al final del archivo.
+
 ## Git Conventions
 
 - Do not add `Co-Authored-By` lines to commit messages.
