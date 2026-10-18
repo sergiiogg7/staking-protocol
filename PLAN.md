@@ -39,6 +39,12 @@
 - **Errores legibles**: mapear los custom errors del contrato a mensajes de usuario en una capa centralizada.
 - **Sin lógica duplicada**: si algo se calcula en el contrato (tiempo restante, elegibilidad), leerlo del contrato — no recalcularlo en el frontend.
 
+### Mentoría
+- **No dar nada por entendido**: antes de implementar cualquier concepto nuevo (patrón, estándar, tool), explicar qué es, por qué se usa y qué problema resuelve — en 2-4 líneas, sin jerga innecesaria.
+- **Explicar el por qué antes del cómo**: no solo escribir el código sino razonar la decisión de diseño tomada.
+- **Señalar conexiones**: cuando un concepto nuevo se relacione con algo ya visto en el proyecto, indicarlo explícitamente.
+- **Progresión consciente**: al terminar cada fase, resumir qué se aprendió y qué habilidades se han añadido al perfil.
+
 ### Git
 - Un commit por tarea del plan, mensaje en formato `type: descripción` (Conventional Commits).
 - Actualizar `PLAN.md` en el mismo commit que completa la tarea.
