@@ -32,16 +32,16 @@ contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
 
     /// @notice The ERC20 token accepted for staking.
-    IERC20 public stakingToken;
+    IERC20 public immutable stakingToken;
 
     /// @notice Duration in seconds a user must hold their stake before claiming rewards.
     uint256 public stakingPeriod;
 
     /// @notice The exact token amount each user must deposit to participate.
-    uint256 public fixStakingAmount;
+    uint256 public immutable fixStakingAmount;
 
     /// @notice ETH amount paid to the staker on each successful reward claim.
-    uint256 public rewardPerPeriod;
+    uint256 public immutable rewardPerPeriod;
 
     /// @notice Token balance currently staked by each user.
     mapping(address => uint256) public userBalance;
