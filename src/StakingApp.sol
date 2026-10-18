@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import "../lib/openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 
 error IncorrectAmount(uint256 expected, uint256 provided);
@@ -12,7 +13,9 @@ error StakingPeriodNotElapsed(uint256 remaining);
 error EthTransferFailed();
 
 contract StakingApp is Ownable2Step, ReentrancyGuard {
-    address public stakingToken;
+    using SafeERC20 for IERC20;
+
+    IERC20 public stakingToken;
     uint256 public stakingPeriod;
     uint256 public fixStakingAmount;
     uint256 public rewardPerPeriod;
@@ -31,7 +34,7 @@ contract StakingApp is Ownable2Step, ReentrancyGuard {
         uint256 fixStakingAmount_,
         uint256 rewardPerPeriod_
     ) Ownable(owner_) {
-        stakingToken = stakingToken_;
+        stakingToken = IERC20(stakingToken_);
         stakingPeriod = stakingPeriod_;
         fixStakingAmount = fixStakingAmount_;
         rewardPerPeriod = rewardPerPeriod_;
@@ -41,7 +44,7 @@ contract StakingApp is Ownable2Step, ReentrancyGuard {
         if (tokenAmountToDeposit_ != fixStakingAmount) revert IncorrectAmount(fixStakingAmount, tokenAmountToDeposit_);
         if (userBalance[msg.sender] != 0) revert AlreadyDeposited();
 
-        IERC20(stakingToken).transferFrom(msg.sender, address(this), tokenAmountToDeposit_);
+        stakingToken.safeTransferFrom(msg.sender, address(this), tokenAmountToDeposit_);
         userBalance[msg.sender] += tokenAmountToDeposit_;
         elapsePeriod[msg.sender] = block.timestamp;
 
@@ -57,7 +60,7 @@ contract StakingApp is Ownable2Step, ReentrancyGuard {
         uint256 userBalance_ = userBalance[msg.sender];
         userBalance[msg.sender] = 0;
         // Interaction
-        IERC20(stakingToken).transfer(msg.sender, userBalance_);
+        stakingToken.safeTransfer(msg.sender, userBalance_);
 
         emit WithdrawTokens(msg.sender, userBalance_);
     }
