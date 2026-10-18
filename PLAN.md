@@ -15,6 +15,37 @@
 
 ---
 
+## Principios de ingeniería (aplican a todas las fases)
+
+### Solidity
+- **Single Responsibility**: cada contrato tiene una responsabilidad única (`StakingToken` emite tokens, `StakingNFT` gestiona posiciones, `StakingApp` orquesta la lógica de staking).
+- **Custom errors con parámetros** en todos los reverts — nunca `require` con strings.
+- **Sin magic numbers**: todas las constantes nombradas (`MAX_SUPPLY`, `BASIS_POINTS`, etc.).
+- **NatSpec completo** en todas las funciones públicas y eventos.
+- **CEI estricto** (Check-Effects-Interactions) en cualquier función que haga transferencias.
+- **Immutable** para variables que no cambian tras el deploy — lectura más barata y documenta intención.
+- **Events indexados** en todos los parámetros que se usarán para filtrar off-chain.
+
+### Testing
+- Cobertura de líneas al 100% mantenida en todo momento.
+- Un test de fuzz por cada función que acepte inputs variables.
+- Un invariante por cada propiedad global del sistema que debe ser siempre verdadera.
+- Los tests nombrados como `test_<función>_<escenario>` para que el output de `forge test` sea autodocumentado.
+
+### Frontend
+- **Separación de capas**: hooks de contrato (`useStakingApp`, `useStakingNFT`) separados de los componentes UI — nunca lógica de contrato dentro de un componente.
+- **Tipado estricto**: ABIs importados como `const` con `as const` para inferencia de tipos completa via viem.
+- **Estado de transacción explícito**: idle → pending → confirming → success/error en cada acción, nunca asumir que una tx confirmada en el cliente es final.
+- **Errores legibles**: mapear los custom errors del contrato a mensajes de usuario en una capa centralizada.
+- **Sin lógica duplicada**: si algo se calcula en el contrato (tiempo restante, elegibilidad), leerlo del contrato — no recalcularlo en el frontend.
+
+### Git
+- Un commit por tarea del plan, mensaje en formato `type: descripción` (Conventional Commits).
+- Actualizar `PLAN.md` en el mismo commit que completa la tarea.
+- No commitear sin confirmación explícita del usuario.
+
+---
+
 ## Fase 1 — Solidity: NFT Staking Position (EIP-721)
 
 > Objetivo: cada posición de staking es un ERC-721. El contrato StakingApp mintea y quema NFTs en lugar de trackear balances por address.
