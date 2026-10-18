@@ -5,6 +5,23 @@
 
 ---
 
+## Stack y versiones verificadas
+
+| Herramienta | Versión estable | Nota |
+|---|---|---|
+| `@openzeppelin/contracts` | v5.7.0 | Ya en uso en el proyecto |
+| `forge-std` | v1.17.0 | Proyecto usa v1.16.2 → actualizar |
+| `foundry / forge` | v1.8.5 | Requiere forge-std ≥ v1.8.3 |
+| `next` | v16.4.2 | Requiere Node.js ≥ 20.9 |
+| `wagmi` | v2.19.5 | Fijar en v2 — RainbowKit aún no soporta v3 |
+| `viem` | v2.55.1 | Fijar en v2, coherente con wagmi |
+| `@rainbow-me/rainbowkit` | v2.2.11 | |
+| `@chainlink/contracts` | v1.5.0 | v1.6.0 está en beta — no usar |
+| `tailwindcss` | v4.3.2 | |
+| `typescript` | v5.9.x | Lo instala create-next-app automáticamente |
+
+---
+
 ## Decisiones de arquitectura
 
 - **EIP-721 como recibo de posición**: al depositar tokens, se mintea un NFT al usuario que representa su posición (stakeAmount + timestamp). Quien tenga el NFT puede hacer claim y withdraw. Patrón usado en producción por Uniswap v3.
@@ -119,6 +136,7 @@ StakingApp   : (pendiente)
 - 🔲 Inicializar scaffold-eth 2 en `/frontend`
 - 🔲 Conectar ABIs generados por Foundry (`out/`) al frontend
 - 🔲 Configurar red Sepolia como default
+- 🔲 Instalar `design-taste-frontend` skill (`/plugin marketplace add Leonxlnx/taste-skill`) — genera UI con dirección artística real, imágenes de referencia y verificación visual en navegador (3 rondas de corrección automática)
 
 ### Ruta `/` — My Position
 
