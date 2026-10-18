@@ -286,6 +286,26 @@ contract StakingAppTest is Test {
 
         assertEq(stakingApp.userBalance(randomUser), 0);
     }
+
+    function testUnpauseRestoresDeposit() external {
+        vm.startPrank(owner_);
+        stakingApp.pause();
+        stakingApp.unpause();
+        vm.stopPrank();
+
+        _stakeAs(randomUser);
+
+        assertEq(stakingApp.userBalance(randomUser), fixedStakingAmount_);
+    }
+
+    function testUnpauseRevertsIfNotOwner() external {
+        vm.prank(owner_);
+        stakingApp.pause();
+
+        vm.prank(randomUser);
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", randomUser));
+        stakingApp.unpause();
+    }
 }
 
 contract ReentrantAttacker {
