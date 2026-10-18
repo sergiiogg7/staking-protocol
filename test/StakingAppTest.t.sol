@@ -6,7 +6,6 @@ import "../src/StakingToken.sol";
 import "../src/StakingApp.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
-// Custom error selectors from StakingApp
 import {
     IncorrectAmount,
     AlreadyDeposited,
@@ -19,21 +18,21 @@ contract StakingAppTest is Test {
     StakingToken stakingToken;
     StakingApp stakingApp;
 
-    string name_ = "Staking Token";
-    string symbol_ = "STK";
-
     address owner_ = vm.addr(1);
     address randomUser = vm.addr(2);
     address newOwner = vm.addr(5);
-    uint256 stakingPeriod_ = 100000000000000;
+    uint256 stakingPeriod_ = 100_000_000_000_000;
     uint256 fixedStakingAmount_ = 10;
     uint256 rewardPerPeriod_ = 1 ether;
 
     function setUp() external {
-        stakingToken = new StakingToken(name_, symbol_, owner_);
-        stakingApp =
-            new StakingApp(address(stakingToken), owner_, stakingPeriod_, fixedStakingAmount_, rewardPerPeriod_);
+        stakingToken = new StakingToken("Staking Token", "STK", owner_);
+        stakingApp = new StakingApp(address(stakingToken), owner_, stakingPeriod_, fixedStakingAmount_, rewardPerPeriod_);
     }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
 
     function _fundUser(address user_, uint256 amount_) internal {
         vm.startPrank(owner_);
@@ -42,47 +41,59 @@ contract StakingAppTest is Test {
         vm.stopPrank();
     }
 
-    function testChangeStakingPeriodShouldRevertIfNotOwner() external {
-        uint256 newStakingPeriod_ = 1;
+    function _stakeAs(address user_) internal {
+        uint256 amount = stakingApp.fixStakingAmount();
+        _fundUser(user_, amount);
+        vm.startPrank(user_);
+        IERC20(address(stakingToken)).approve(address(stakingApp), amount);
+        stakingApp.depositToken(amount);
+        vm.stopPrank();
+    }
 
+    function _fundContractWithEth() internal {
+        vm.startPrank(owner_);
+        vm.deal(owner_, 100_000 ether);
+        (bool success,) = address(stakingApp).call{value: 100_000 ether}("");
+        require(success, "ETH fund failed");
+        vm.stopPrank();
+    }
+
+    // -------------------------------------------------------------------------
+    // changeStakingPeriod
+    // -------------------------------------------------------------------------
+
+    function testChangeStakingPeriodShouldRevertIfNotOwner() external {
         vm.expectRevert();
-        stakingApp.changeStakingPeriod(newStakingPeriod_);
+        stakingApp.changeStakingPeriod(1);
     }
 
     function testShouldChangeStakingPeriod() external {
-        vm.startPrank(owner_);
-        uint256 newStakingPeriod_ = 1;
+        vm.prank(owner_);
+        stakingApp.changeStakingPeriod(1);
 
-        uint256 stakingPeriodBefore_ = stakingApp.stakingPeriod(); // ? not getterts or setters?
-        stakingApp.changeStakingPeriod(newStakingPeriod_);
-        uint256 stakingPeriodAfter_ = stakingApp.stakingPeriod();
-
-        assert(stakingPeriodBefore_ != stakingPeriodAfter_);
-        assert(stakingPeriodAfter_ == newStakingPeriod_);
-
-        vm.stopPrank();
+        assertEq(stakingApp.stakingPeriod(), 1);
     }
+
+    // -------------------------------------------------------------------------
+    // receive
+    // -------------------------------------------------------------------------
 
     function testContractReceiveEtherCorrectly() external {
-        vm.startPrank(owner_);
-        uint256 etherValue = 1 ether;
-        vm.deal(owner_, etherValue);
-
         uint256 balanceBefore = address(stakingApp).balance;
-        (bool success,) = address(stakingApp).call{value: etherValue}("");
-        require(success, "Transfer failed");
-        uint256 balanceAfter = address(stakingApp).balance;
+        _fundContractWithEth();
 
-        assert(balanceAfter - balanceBefore == etherValue);
-        vm.stopPrank();
+        assertEq(address(stakingApp).balance - balanceBefore, 100_000 ether);
     }
 
+    // -------------------------------------------------------------------------
+    // depositToken
+    // -------------------------------------------------------------------------
+
     function testIncorrectAmountShouldRevert() external {
-        vm.startPrank(randomUser);
         uint256 depositAmount = 1;
+        vm.prank(randomUser);
         vm.expectRevert(abi.encodeWithSelector(IncorrectAmount.selector, fixedStakingAmount_, depositAmount));
         stakingApp.depositToken(depositAmount);
-        vm.stopPrank();
     }
 
     function testDepositTokensCorrectly() external {
@@ -90,200 +101,117 @@ contract StakingAppTest is Test {
         _fundUser(randomUser, tokenAmount);
 
         vm.startPrank(randomUser);
-        uint256 userBalanceBefore = stakingApp.userBalance(randomUser);
-        uint256 elapsePeriodBefore = stakingApp.elapsePeriod(randomUser);
-        IERC20(stakingToken).approve(address(stakingApp), tokenAmount);
+        IERC20(address(stakingToken)).approve(address(stakingApp), tokenAmount);
         stakingApp.depositToken(tokenAmount);
-        uint256 userBalanceAfter = stakingApp.userBalance(randomUser);
-        uint256 elapsePeriodAfter = stakingApp.elapsePeriod(randomUser);
-
-        assert(userBalanceAfter - userBalanceBefore == tokenAmount);
-        assert(elapsePeriodBefore == 0);
-        assert(elapsePeriodAfter == block.timestamp);
-
         vm.stopPrank();
+
+        assertEq(stakingApp.userBalance(randomUser), tokenAmount);
+        assertEq(stakingApp.elapsePeriod(randomUser), block.timestamp);
     }
 
     function testUserCanNotDepositMoreThanOnce() external {
-        uint256 tokenAmount = stakingApp.fixStakingAmount();
-        _fundUser(randomUser, tokenAmount);
+        _stakeAs(randomUser);
+        _fundUser(randomUser, fixedStakingAmount_);
 
         vm.startPrank(randomUser);
-        uint256 userBalanceBefore = stakingApp.userBalance(randomUser);
-        uint256 elapsePeriodBefore = stakingApp.elapsePeriod(randomUser);
-        IERC20(stakingToken).approve(address(stakingApp), tokenAmount);
-        stakingApp.depositToken(tokenAmount);
-        uint256 userBalanceAfter = stakingApp.userBalance(randomUser);
-        uint256 elapsePeriodAfter = stakingApp.elapsePeriod(randomUser);
-
-        assert(userBalanceAfter - userBalanceBefore == tokenAmount);
-        assert(elapsePeriodBefore == 0);
-        assert(elapsePeriodAfter == block.timestamp);
-        vm.stopPrank();
-
-        _fundUser(randomUser, tokenAmount);
-
-        vm.startPrank(randomUser);
-        IERC20(stakingToken).approve(address(stakingApp), tokenAmount);
+        IERC20(address(stakingToken)).approve(address(stakingApp), fixedStakingAmount_);
         vm.expectRevert(AlreadyDeposited.selector);
-        stakingApp.depositToken(tokenAmount);
-
+        stakingApp.depositToken(fixedStakingAmount_);
         vm.stopPrank();
     }
 
-    function testCanNotWithdrawIfNotStaking() external {
-        vm.startPrank(randomUser);
+    // -------------------------------------------------------------------------
+    // withdrawTokens
+    // -------------------------------------------------------------------------
 
+    function testCanNotWithdrawIfNotStaking() external {
+        vm.prank(randomUser);
         vm.expectRevert(NotStaking.selector);
         stakingApp.withdrawTokens();
-
-        vm.stopPrank();
     }
 
     function testCanWithdrawAfterDeposit() external {
-        uint256 tokenAmount = stakingApp.fixStakingAmount();
-        _fundUser(randomUser, tokenAmount);
+        _stakeAs(randomUser);
 
-        vm.startPrank(randomUser);
-        uint256 userBalanceBefore = stakingApp.userBalance(randomUser);
-        uint256 elapsePeriodBefore = stakingApp.elapsePeriod(randomUser);
-        IERC20(stakingToken).approve(address(stakingApp), tokenAmount);
-        stakingApp.depositToken(tokenAmount);
-        uint256 userBalanceAfter = stakingApp.userBalance(randomUser);
-        uint256 elapsePeriodAfter = stakingApp.elapsePeriod(randomUser);
+        uint256 tokenBalanceBefore = IERC20(address(stakingToken)).balanceOf(randomUser);
+        uint256 stakedAmount = stakingApp.userBalance(randomUser);
 
-        assert(userBalanceAfter - userBalanceBefore == tokenAmount);
-        assert(elapsePeriodBefore == 0);
-        assert(elapsePeriodAfter == block.timestamp);
-
-        uint256 userBalanceBefore2 = IERC20(stakingToken).balanceOf(randomUser);
-        uint256 userBalanceInMapping = stakingApp.userBalance(randomUser);
+        vm.prank(randomUser);
         stakingApp.withdrawTokens();
-        uint256 userBalanceAfter2 = IERC20(stakingToken).balanceOf(randomUser);
 
-        assert(userBalanceAfter2 == userBalanceBefore2 + userBalanceInMapping);
-
-        vm.stopPrank();
+        assertEq(IERC20(address(stakingToken)).balanceOf(randomUser), tokenBalanceBefore + stakedAmount);
+        assertEq(stakingApp.userBalance(randomUser), 0);
     }
 
-    function testCanNotClaimIfNotStaking() external {
-        vm.startPrank(randomUser);
+    // -------------------------------------------------------------------------
+    // claimRewards
+    // -------------------------------------------------------------------------
 
+    function testCanNotClaimIfNotStaking() external {
+        vm.prank(randomUser);
         vm.expectRevert(NotStaking.selector);
         stakingApp.claimRewards();
-
-        vm.stopPrank();
     }
 
     function testCanNotClaimIfNotElapsedTime() external {
-        uint256 tokenAmount = stakingApp.fixStakingAmount();
-        _fundUser(randomUser, tokenAmount);
+        _stakeAs(randomUser);
 
-        vm.startPrank(randomUser);
-        uint256 userBalanceBefore = stakingApp.userBalance(randomUser);
-        uint256 elapsePeriodBefore = stakingApp.elapsePeriod(randomUser);
-        IERC20(stakingToken).approve(address(stakingApp), tokenAmount);
-        stakingApp.depositToken(tokenAmount);
-        uint256 userBalanceAfter = stakingApp.userBalance(randomUser);
-        uint256 elapsePeriodAfter = stakingApp.elapsePeriod(randomUser);
-
-        assert(userBalanceAfter - userBalanceBefore == tokenAmount);
-        assert(elapsePeriodBefore == 0);
-        assert(elapsePeriodAfter == block.timestamp);
-
+        vm.prank(randomUser);
         vm.expectRevert(abi.encodeWithSelector(StakingPeriodNotElapsed.selector, stakingPeriod_));
         stakingApp.claimRewards();
-
-        vm.stopPrank();
     }
 
     function testShouldRevertIfNoEther() external {
-        uint256 tokenAmount = stakingApp.fixStakingAmount();
-        _fundUser(randomUser, tokenAmount);
-
-        vm.startPrank(randomUser);
-        uint256 userBalanceBefore = stakingApp.userBalance(randomUser);
-        uint256 elapsePeriodBefore = stakingApp.elapsePeriod(randomUser);
-        IERC20(stakingToken).approve(address(stakingApp), tokenAmount);
-        stakingApp.depositToken(tokenAmount);
-        uint256 userBalanceAfter = stakingApp.userBalance(randomUser);
-        uint256 elapsePeriodAfter = stakingApp.elapsePeriod(randomUser);
-
-        assert(userBalanceAfter - userBalanceBefore == tokenAmount);
-        assert(elapsePeriodBefore == 0);
-        assert(elapsePeriodAfter == block.timestamp);
-
+        _stakeAs(randomUser);
         vm.warp(block.timestamp + stakingPeriod_);
+
+        vm.prank(randomUser);
         vm.expectRevert(EthTransferFailed.selector);
         stakingApp.claimRewards();
-
-        vm.stopPrank();
     }
 
     function testCanClaimRewardsCorrectly() external {
-        uint256 tokenAmount = stakingApp.fixStakingAmount();
-        _fundUser(randomUser, tokenAmount);
-
-        vm.startPrank(randomUser);
-        uint256 userBalanceBefore = stakingApp.userBalance(randomUser);
-        uint256 elapsePeriodBefore = stakingApp.elapsePeriod(randomUser);
-        IERC20(stakingToken).approve(address(stakingApp), tokenAmount);
-        stakingApp.depositToken(tokenAmount);
-        uint256 userBalanceAfter = stakingApp.userBalance(randomUser);
-        uint256 elapsePeriodAfter = stakingApp.elapsePeriod(randomUser);
-
-        assert(userBalanceAfter - userBalanceBefore == tokenAmount);
-        assert(elapsePeriodBefore == 0);
-        assert(elapsePeriodAfter == block.timestamp);
-        vm.stopPrank();
-
-        vm.startPrank(owner_);
-        uint256 etherAmount = 100000 ether;
-        vm.deal(owner_, etherAmount);
-        (bool success,) = address(stakingApp).call{value: etherAmount}("");
-        require(success, "Test transfer failed");
-        vm.stopPrank();
-
-        vm.startPrank(randomUser);
+        _stakeAs(randomUser);
+        _fundContractWithEth();
         vm.warp(block.timestamp + stakingPeriod_);
-        uint256 etherAmountBefore = address(randomUser).balance;
+
+        uint256 ethBefore = address(randomUser).balance;
+        vm.startPrank(randomUser);
         vm.expectEmit(true, false, false, true);
         emit StakingApp.RewardsClaimed(randomUser, rewardPerPeriod_);
         stakingApp.claimRewards();
-        uint256 etherAmountAfter = address(randomUser).balance;
-        uint256 elapsedPeriod = stakingApp.elapsePeriod(randomUser);
-
-        assert(etherAmountAfter - etherAmountBefore == rewardPerPeriod_);
-        assert(elapsedPeriod == block.timestamp);
-
         vm.stopPrank();
+
+        assertEq(address(randomUser).balance - ethBefore, rewardPerPeriod_);
+        assertEq(stakingApp.elapsePeriod(randomUser), block.timestamp);
     }
 
-    function testTransferOwnershipRequiresTwoSteps() external {
-        vm.startPrank(owner_);
-        stakingApp.transferOwnership(newOwner);
-        vm.stopPrank();
+    // -------------------------------------------------------------------------
+    // Ownership
+    // -------------------------------------------------------------------------
 
-        assert(stakingApp.owner() == owner_);
-        assert(stakingApp.pendingOwner() == newOwner);
+    function testTransferOwnershipRequiresTwoSteps() external {
+        vm.prank(owner_);
+        stakingApp.transferOwnership(newOwner);
+
+        assertEq(stakingApp.owner(), owner_);
+        assertEq(stakingApp.pendingOwner(), newOwner);
     }
 
     function testAcceptOwnershipTransfersOwnership() external {
-        vm.startPrank(owner_);
+        vm.prank(owner_);
         stakingApp.transferOwnership(newOwner);
-        vm.stopPrank();
 
         vm.prank(newOwner);
         stakingApp.acceptOwnership();
 
-        assert(stakingApp.owner() == newOwner);
-        assert(stakingApp.pendingOwner() == address(0));
+        assertEq(stakingApp.owner(), newOwner);
+        assertEq(stakingApp.pendingOwner(), address(0));
     }
 
     function testAcceptOwnershipShouldRevertIfNotPendingOwner() external {
-        vm.startPrank(owner_);
+        vm.prank(owner_);
         stakingApp.transferOwnership(newOwner);
-        vm.stopPrank();
 
         vm.prank(randomUser);
         vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", randomUser));
@@ -296,24 +224,20 @@ contract StakingAppTest is Test {
         stakingApp.transferOwnership(newOwner);
     }
 
+    // -------------------------------------------------------------------------
+    // Security
+    // -------------------------------------------------------------------------
+
     function testClaimRewardsShouldRevertOnReentrancy() external {
         ReentrantAttacker attacker = new ReentrantAttacker(payable(address(stakingApp)));
 
-        uint256 tokenAmount = stakingApp.fixStakingAmount();
-        _fundUser(address(attacker), tokenAmount);
-
+        _fundUser(address(attacker), fixedStakingAmount_);
         vm.startPrank(address(attacker));
-        IERC20(stakingToken).approve(address(stakingApp), tokenAmount);
-        attacker.deposit(tokenAmount);
+        IERC20(address(stakingToken)).approve(address(stakingApp), fixedStakingAmount_);
+        attacker.deposit(fixedStakingAmount_);
         vm.stopPrank();
 
-        vm.startPrank(owner_);
-        uint256 etherAmount = 100000 ether;
-        vm.deal(owner_, etherAmount);
-        (bool success,) = address(stakingApp).call{value: etherAmount}("");
-        require(success, "Test transfer failed");
-        vm.stopPrank();
-
+        _fundContractWithEth();
         vm.warp(block.timestamp + stakingPeriod_);
 
         vm.prank(address(attacker));
@@ -322,48 +246,36 @@ contract StakingAppTest is Test {
         assertEq(attacker.lastRevertReason(), abi.encodeWithSignature("ReentrancyGuardReentrantCall()"));
     }
 
+    // -------------------------------------------------------------------------
+    // Pausable
+    // -------------------------------------------------------------------------
+
     function testDepositRevertsWhenPaused() external {
         vm.prank(owner_);
         stakingApp.pause();
 
-        uint256 tokenAmount = stakingApp.fixStakingAmount();
-        _fundUser(randomUser, tokenAmount);
-
+        _fundUser(randomUser, fixedStakingAmount_);
         vm.startPrank(randomUser);
-        IERC20(stakingToken).approve(address(stakingApp), tokenAmount);
+        IERC20(address(stakingToken)).approve(address(stakingApp), fixedStakingAmount_);
         vm.expectRevert(abi.encodeWithSignature("EnforcedPause()"));
-        stakingApp.depositToken(tokenAmount);
+        stakingApp.depositToken(fixedStakingAmount_);
         vm.stopPrank();
     }
 
     function testClaimRevertsWhenPaused() external {
-        uint256 tokenAmount = stakingApp.fixStakingAmount();
-        _fundUser(randomUser, tokenAmount);
-
-        vm.startPrank(randomUser);
-        IERC20(stakingToken).approve(address(stakingApp), tokenAmount);
-        stakingApp.depositToken(tokenAmount);
-        vm.stopPrank();
-        
+        _stakeAs(randomUser);
 
         vm.prank(owner_);
         stakingApp.pause();
 
-        vm.startPrank(randomUser);
         vm.warp(block.timestamp + stakingPeriod_);
+        vm.prank(randomUser);
         vm.expectRevert(abi.encodeWithSignature("EnforcedPause()"));
         stakingApp.claimRewards();
-        vm.stopPrank();
     }
 
     function testWithdrawSucceedsWhenPaused() external {
-        uint256 tokenAmount = stakingApp.fixStakingAmount();
-        _fundUser(randomUser, tokenAmount);
-
-        vm.startPrank(randomUser);
-        IERC20(stakingToken).approve(address(stakingApp), tokenAmount);
-        stakingApp.depositToken(tokenAmount);
-        vm.stopPrank();
+        _stakeAs(randomUser);
 
         vm.prank(owner_);
         stakingApp.pause();
