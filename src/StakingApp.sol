@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import "../lib/openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import "../lib/openzeppelin-contracts/contracts/utils/Pausable.sol";
 import "../lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 
 error IncorrectAmount(uint256 expected, uint256 provided);
@@ -12,7 +13,7 @@ error NotStaking();
 error StakingPeriodNotElapsed(uint256 remaining);
 error EthTransferFailed();
 
-contract StakingApp is Ownable2Step, ReentrancyGuard {
+contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
 
     IERC20 public stakingToken;
@@ -41,7 +42,15 @@ contract StakingApp is Ownable2Step, ReentrancyGuard {
         rewardPerPeriod = rewardPerPeriod_;
     }
 
-    function depositToken(uint256 tokenAmountToDeposit_) external nonReentrant {
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    function unpause() external onlyOwner {
+        _unpause();
+    }
+
+    function depositToken(uint256 tokenAmountToDeposit_) external nonReentrant whenNotPaused {
         if (tokenAmountToDeposit_ != fixStakingAmount) revert IncorrectAmount(fixStakingAmount, tokenAmountToDeposit_);
         if (userBalance[msg.sender] != 0) revert AlreadyDeposited();
 
@@ -66,7 +75,7 @@ contract StakingApp is Ownable2Step, ReentrancyGuard {
         emit WithdrawTokens(msg.sender, userBalance_);
     }
 
-    function claimRewards() external nonReentrant {
+    function claimRewards() external nonReentrant whenNotPaused {
         //1. Check State
         if (userBalance[msg.sender] != fixStakingAmount) revert NotStaking();
 

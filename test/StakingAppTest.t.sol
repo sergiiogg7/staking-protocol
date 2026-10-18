@@ -321,6 +321,58 @@ contract StakingAppTest is Test {
 
         assertEq(attacker.lastRevertReason(), abi.encodeWithSignature("ReentrancyGuardReentrantCall()"));
     }
+
+    function testDepositRevertsWhenPaused() external {
+        vm.prank(owner_);
+        stakingApp.pause();
+
+        uint256 tokenAmount = stakingApp.fixStakingAmount();
+        _fundUser(randomUser, tokenAmount);
+
+        vm.startPrank(randomUser);
+        IERC20(stakingToken).approve(address(stakingApp), tokenAmount);
+        vm.expectRevert(abi.encodeWithSignature("EnforcedPause()"));
+        stakingApp.depositToken(tokenAmount);
+        vm.stopPrank();
+    }
+
+    function testClaimRevertsWhenPaused() external {
+        uint256 tokenAmount = stakingApp.fixStakingAmount();
+        _fundUser(randomUser, tokenAmount);
+
+        vm.startPrank(randomUser);
+        IERC20(stakingToken).approve(address(stakingApp), tokenAmount);
+        stakingApp.depositToken(tokenAmount);
+        vm.stopPrank();
+        
+
+        vm.prank(owner_);
+        stakingApp.pause();
+
+        vm.startPrank(randomUser);
+        vm.warp(block.timestamp + stakingPeriod_);
+        vm.expectRevert(abi.encodeWithSignature("EnforcedPause()"));
+        stakingApp.claimRewards();
+        vm.stopPrank();
+    }
+
+    function testWithdrawSucceedsWhenPaused() external {
+        uint256 tokenAmount = stakingApp.fixStakingAmount();
+        _fundUser(randomUser, tokenAmount);
+
+        vm.startPrank(randomUser);
+        IERC20(stakingToken).approve(address(stakingApp), tokenAmount);
+        stakingApp.depositToken(tokenAmount);
+        vm.stopPrank();
+
+        vm.prank(owner_);
+        stakingApp.pause();
+
+        vm.prank(randomUser);
+        stakingApp.withdrawTokens();
+
+        assertEq(stakingApp.userBalance(randomUser), 0);
+    }
 }
 
 contract ReentrantAttacker {
