@@ -27,10 +27,16 @@
 - **Events indexados** en todos los parámetros que se usarán para filtrar off-chain.
 
 ### Testing
-- Cobertura de líneas al 100% mantenida en todo momento.
-- Un test de fuzz por cada función que acepte inputs variables.
-- Un invariante por cada propiedad global del sistema que debe ser siempre verdadera.
-- Los tests nombrados como `test_<función>_<escenario>` para que el output de `forge test` sea autodocumentado.
+- **Patrón AAA obligatorio** en todos los tests: bloques `// Arrange`, `// Act`, `// Assert` explícitos y separados — nunca mezclar setup con aserciones.
+- **Un test, una aserción conceptual**: cada test verifica una sola cosa. Si falla, el nombre del test dice exactamente qué falló.
+- **Nomenclatura**: `test_<función>_<escenario>_<resultado esperado>` — e.g. `test_depositToken_whenAlreadyDeposited_revertsWithAlreadyDeposited`.
+- **Cobertura por tipo**:
+  - *Unit*: happy path + cada revert posible + cada rama de control de acceso.
+  - *Fuzz*: una función de fuzz por cada parámetro numérico que pueda tomar valores extremos.
+  - *Invariant*: una por cada propiedad global que debe ser siempre verdadera, con handler que restringe las llamadas a estado válido.
+  - *Integration*: flujos completos de extremo a extremo (deposit → wait → claim → withdraw).
+- **Sin tests acoplados**: cada test arranca desde `setUp` limpio, nunca depende del orden de ejecución.
+- **Cobertura de líneas al 100%** mantenida en todo momento — `forge coverage` como gate en CI.
 
 ### Frontend
 - **Separación de capas**: hooks de contrato (`useStakingApp`, `useStakingNFT`) separados de los componentes UI — nunca lógica de contrato dentro de un componente.
