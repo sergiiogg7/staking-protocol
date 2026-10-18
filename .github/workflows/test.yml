@@ -36,3 +36,8 @@ jobs:
 
       - name: Check gas snapshot
         run: forge snapshot --check
+
+      - name: Run Slither
+        uses: crytic/slither-action@v0.4.0
+        with:
+          slither-args: --exclude-dependencies
