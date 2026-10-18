@@ -6,6 +6,15 @@ import "../src/StakingToken.sol";
 import "../src/StakingApp.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
+// Custom error selectors from StakingApp
+import {
+    IncorrectAmount,
+    AlreadyDeposited,
+    NotStaking,
+    StakingPeriodNotElapsed,
+    EthTransferFailed
+} from "../src/StakingApp.sol";
+
 contract StakingTokenTest is Test {
     StakingToken stakingToken;
     StakingApp stakingApp;
@@ -71,7 +80,7 @@ contract StakingTokenTest is Test {
     function testIncorrectAmountShouldRevert() external {
         vm.startPrank(randomUser);
         uint256 depositAmount = 1;
-        vm.expectRevert("Incorrect Amount");
+        vm.expectRevert(abi.encodeWithSelector(IncorrectAmount.selector, fixedStakingAmount_, depositAmount));
         stakingApp.depositToken(depositAmount);
         vm.stopPrank();
     }
@@ -116,7 +125,7 @@ contract StakingTokenTest is Test {
 
         vm.startPrank(randomUser);
         IERC20(stakingToken).approve(address(stakingApp), tokenAmount);
-        vm.expectRevert("User already deposited");
+        vm.expectRevert(AlreadyDeposited.selector);
         stakingApp.depositToken(tokenAmount);
 
         vm.stopPrank();
@@ -125,7 +134,7 @@ contract StakingTokenTest is Test {
     function testCanNotWithdrawIfNotStaking() external {
         vm.startPrank(randomUser);
 
-        vm.expectRevert("Not staking");
+        vm.expectRevert(NotStaking.selector);
         stakingApp.withdrawTokens();
 
         vm.stopPrank();
@@ -160,7 +169,7 @@ contract StakingTokenTest is Test {
     function testCanNotClaimIfNotStaking() external {
         vm.startPrank(randomUser);
 
-        vm.expectRevert("Not staking");
+        vm.expectRevert(NotStaking.selector);
         stakingApp.claimRewards();
 
         vm.stopPrank();
@@ -182,7 +191,7 @@ contract StakingTokenTest is Test {
         assert(elapsePeriodBefore == 0);
         assert(elapsePeriodAfter == block.timestamp);
 
-        vm.expectRevert("Need to wait");
+        vm.expectRevert(abi.encodeWithSelector(StakingPeriodNotElapsed.selector, stakingPeriod_));
         stakingApp.claimRewards();
 
         vm.stopPrank();
@@ -205,7 +214,7 @@ contract StakingTokenTest is Test {
         assert(elapsePeriodAfter == block.timestamp);
 
         vm.warp(block.timestamp + stakingPeriod_);
-        vm.expectRevert("Transfer failed");
+        vm.expectRevert(EthTransferFailed.selector);
         stakingApp.claimRewards();
 
         vm.stopPrank();
@@ -329,8 +338,7 @@ contract ReentrantAttacker {
     }
 
     receive() external payable {
-        (bool success, bytes memory data) =
-            address(stakingApp).call(abi.encodeWithSignature("claimRewards()"));
+        (bool success, bytes memory data) = address(stakingApp).call(abi.encodeWithSignature("claimRewards()"));
         if (!success) {
             lastRevertReason = data;
         }

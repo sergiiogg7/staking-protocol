@@ -5,6 +5,8 @@ import "forge-std/Test.sol";
 import "../src/StakingToken.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
+import {MaxSupplyExceeded, LengthMismatch, InvalidRecipient} from "../src/StakingToken.sol";
+
 contract StakingTokenTest is Test {
     StakingToken stakingToken;
     string name_ = "Staking Token";
@@ -44,7 +46,7 @@ contract StakingTokenTest is Test {
         vm.startPrank(owner_);
 
         uint256 available = StakingToken(stakingToken).MAX_SUPPLY() - stakingToken.totalSupply();
-        vm.expectRevert("Max supply exceeded");
+        vm.expectRevert(abi.encodeWithSelector(MaxSupplyExceeded.selector, available, available + 1));
         stakingToken.mint(available + 1);
 
         vm.stopPrank();
@@ -99,7 +101,7 @@ contract StakingTokenTest is Test {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = 1;
 
-        vm.expectRevert("Length mismatch");
+        vm.expectRevert(abi.encodeWithSelector(LengthMismatch.selector, 2, 1));
         stakingToken.distributeTokens(recipients, amounts);
 
         vm.stopPrank();
@@ -113,7 +115,7 @@ contract StakingTokenTest is Test {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = 1;
 
-        vm.expectRevert("Invalid recipient");
+        vm.expectRevert(abi.encodeWithSelector(InvalidRecipient.selector, 0));
         stakingToken.distributeTokens(recipients, amounts);
 
         vm.stopPrank();

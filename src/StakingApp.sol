@@ -5,6 +5,12 @@ import "../lib/openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "../lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 
+error IncorrectAmount(uint256 expected, uint256 provided);
+error AlreadyDeposited();
+error NotStaking();
+error StakingPeriodNotElapsed(uint256 remaining);
+error EthTransferFailed();
+
 contract StakingApp is Ownable2Step, ReentrancyGuard {
     address public stakingToken;
     uint256 public stakingPeriod;
@@ -31,9 +37,9 @@ contract StakingApp is Ownable2Step, ReentrancyGuard {
         rewardPerPeriod = rewardPerPeriod_;
     }
 
-    function depositToken(uint256 tokenAmountToDeposit_) external {
-        require(tokenAmountToDeposit_ == fixStakingAmount, "Incorrect Amount");
-        require(userBalance[msg.sender] == 0, "User already deposited");
+    function depositToken(uint256 tokenAmountToDeposit_) external nonReentrant {
+        if (tokenAmountToDeposit_ != fixStakingAmount) revert IncorrectAmount(fixStakingAmount, tokenAmountToDeposit_);
+        if (userBalance[msg.sender] != 0) revert AlreadyDeposited();
 
         IERC20(stakingToken).transferFrom(msg.sender, address(this), tokenAmountToDeposit_);
         userBalance[msg.sender] += tokenAmountToDeposit_;
@@ -46,7 +52,7 @@ contract StakingApp is Ownable2Step, ReentrancyGuard {
         // CEI PATTERN
 
         // Check
-        require(userBalance[msg.sender] == fixStakingAmount, "Not staking");
+        if (userBalance[msg.sender] != fixStakingAmount) revert NotStaking();
         // Effects
         uint256 userBalance_ = userBalance[msg.sender];
         userBalance[msg.sender] = 0;
@@ -58,18 +64,18 @@ contract StakingApp is Ownable2Step, ReentrancyGuard {
 
     function claimRewards() external nonReentrant {
         //1. Check State
-        require(userBalance[msg.sender] == fixStakingAmount, "Not staking");
+        if (userBalance[msg.sender] != fixStakingAmount) revert NotStaking();
 
         //2. Calculate reward amount
         uint256 elapsePeriod_ = block.timestamp - elapsePeriod[msg.sender];
-        require(elapsePeriod_ >= stakingPeriod, "Need to wait");
+        if (elapsePeriod_ < stakingPeriod) revert StakingPeriodNotElapsed(stakingPeriod - elapsePeriod_);
 
         //3. Update State
         elapsePeriod[msg.sender] = block.timestamp;
 
         //4. Transfer Rewards
         (bool success,) = msg.sender.call{value: rewardPerPeriod}("");
-        require(success, "Transfer failed");
+        if (!success) revert EthTransferFailed();
     }
 
     receive() external payable onlyOwner {
