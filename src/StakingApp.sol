@@ -23,8 +23,9 @@ contract StakingApp is Ownable2Step, ReentrancyGuard {
     mapping(address => uint256) public elapsePeriod;
 
     event ChangeStakingPeriod(uint256 stakingPeriod_);
-    event DepositTokens(address userAddress_, uint256 depositAmount_);
-    event WithdrawTokens(address userAddress_, uint256 withdrawAmount_);
+    event DepositTokens(address indexed userAddress_, uint256 depositAmount_);
+    event WithdrawTokens(address indexed userAddress_, uint256 withdrawAmount_);
+    event RewardsClaimed(address indexed user_, uint256 amount_);
     event EtherSent(uint256 amount_);
 
     constructor(
@@ -79,6 +80,8 @@ contract StakingApp is Ownable2Step, ReentrancyGuard {
         //4. Transfer Rewards
         (bool success,) = msg.sender.call{value: rewardPerPeriod}("");
         if (!success) revert EthTransferFailed();
+
+        emit RewardsClaimed(msg.sender, rewardPerPeriod);
     }
 
     receive() external payable onlyOwner {

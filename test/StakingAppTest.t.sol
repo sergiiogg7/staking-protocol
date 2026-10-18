@@ -15,7 +15,7 @@ import {
     EthTransferFailed
 } from "../src/StakingApp.sol";
 
-contract StakingTokenTest is Test {
+contract StakingAppTest is Test {
     StakingToken stakingToken;
     StakingApp stakingApp;
 
@@ -247,6 +247,8 @@ contract StakingTokenTest is Test {
         vm.startPrank(randomUser);
         vm.warp(block.timestamp + stakingPeriod_);
         uint256 etherAmountBefore = address(randomUser).balance;
+        vm.expectEmit(true, false, false, true);
+        emit StakingApp.RewardsClaimed(randomUser, rewardPerPeriod_);
         stakingApp.claimRewards();
         uint256 etherAmountAfter = address(randomUser).balance;
         uint256 elapsedPeriod = stakingApp.elapsePeriod(randomUser);
