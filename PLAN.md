@@ -81,29 +81,32 @@
 
 ### Contratos
 
-- 🔲 Crear `src/StakingNFT.sol`
+- ✅ Crear `src/StakingNFT.sol`
   - ERC-721 con metadata on-chain (tokenId, amount, depositTimestamp)
-  - Solo `StakingApp` puede mint y burn (control de acceso por role o por address)
-  - `tokenURI` generado on-chain en base64 (SVG simple con los datos de la posición)
+  - Solo `StakingApp` puede mint y burn (control de acceso por `immutable stakingApp`)
+  - `tokenURI` generado on-chain en base64 (SVG + JSON) — patrón de address prediction para resolver dependencia circular
+  - `totalPositions` counter para el invariante
 
-- 🔲 Refactorizar `src/StakingApp.sol`
-  - Reemplazar `mapping(address => uint256) userBalance` por `mapping(address => uint256) userTokenId`
-  - `depositToken` → mintea NFT al depositante, guarda `tokenId`
-  - `withdrawTokens` → burn del NFT, devuelve tokens
-  - `claimRewards` → verifica que `msg.sender` es el owner del NFT de su posición
-  - Mantener todas las guards actuales (ReentrancyGuard, Pausable, CEI)
+- ✅ Refactorizar `src/StakingApp.sol`
+  - `mapping(address => uint256) userBalance` → `mapping(address => uint256) userTokenId`
+  - `mapping(address => uint256) elapsePeriod` → `mapping(address => uint256) lastActivity`
+  - `depositToken` → mintea NFT, guarda tokenId
+  - `withdrawTokens` → burn del NFT (CEI: state cleared antes de calls externos)
+  - `claimRewards` → verifica tokenId != 0 y período elapsed
+  - `StakingNFT public immutable stakingNFT` añadido al constructor
+  - Eventos `DepositTokens` y `WithdrawTokens` actualizados con `tokenId` indexado
 
 ### Tests
 
-- 🔲 Actualizar `test/StakingAppTest.t.sol` para el nuevo flujo con NFT
-- 🔲 Actualizar `test/StakingAppFuzz.t.sol`
-- 🔲 Actualizar `test/StakingAppInvariant.t.sol` — el invariante ahora es: `totalSupply(NFT) * fixStakingAmount == tokenBalance(StakingApp)`
-- 🔲 Añadir `test/StakingNFTTest.t.sol` — mint, burn, metadata, access control
-- 🔲 Mantener 100% de cobertura de líneas
+- ✅ Actualizar `test/StakingAppTest.t.sol` — 22 tests, renombrados con patrón `test_<fn>_<escenario>_<resultado>`
+- ✅ Actualizar `test/StakingAppFuzz.t.sol` — setUp con address prediction para StakingNFT
+- ✅ Actualizar `test/StakingAppInvariant.t.sol` — invariante: `totalPositions * fixStakingAmount == tokenBalance(StakingApp)`
+- ✅ Añadir `test/StakingNFTTest.t.sol` — 14 tests: mint, burn, tokenURI, access control, transferibilidad
+- ✅ 100% cobertura de líneas en los 3 contratos de producción (48 tests, 0 fallos)
 
 ### CI
 
-- 🔲 Actualizar `.gas-snapshot` tras los cambios
+- ✅ Actualizar `.gas-snapshot` tras los cambios
 - 🔲 Verificar que Slither no introduce nuevos findings
 
 ---
@@ -200,3 +203,11 @@ StakingApp   : (pendiente)
 | Fecha | Fase | Acción |
 |---|---|---|
 | 2026-10-18 | — | Plan creado |
+| 2026-10-19 | 1 | StakingNFT.sol creado — ERC-721 on-chain base64 SVG, totalPositions counter |
+| 2026-10-19 | 1 | StakingApp.sol refactorizado — userTokenId + lastActivity, StakingNFT integrado |
+| 2026-10-19 | 1 | Tests actualizados — 48 tests, 100% cobertura en src/, invariante NFT |
+| 2026-10-19 | 1 | .gas-snapshot actualizado |
+| 2026-10-19 | 1 | Renderer contract: ITokenURIDescriptor + StakingNFTDescriptor, CEI fix en depositToken |
+| 2026-10-19 | 1 | Single source of truth: nextTokenId() eliminado, tokenId solo desde mint() return |
+| 2026-10-19 | 1 | depositToken order: lastActivity → mint() → userTokenId → safeTransferFrom (CEI + single updater) |
+| 2026-10-19 | 1 | CLAUDE.md: principios de ingeniería actualizados — sin comentarios de flujo, sin over-engineering, trilemma CEI documentado |

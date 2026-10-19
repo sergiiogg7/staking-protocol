@@ -3,29 +3,29 @@ pragma solidity ^0.8.24;
 
 import "forge-std/Test.sol";
 import "../src/StakingToken.sol";
+import "../src/StakingNFTDescriptor.sol";
+import "../src/StakingNFT.sol";
 import "../src/StakingApp.sol";
 import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
 // Handler wraps StakingApp calls so Foundry can call them with valid state.
 contract StakingAppHandler is Test {
     StakingToken public stakingToken;
+    StakingNFT public stakingNFT;
     StakingApp public stakingApp;
 
     address public owner;
     address[] public stakers;
 
-    // Tracks total tokens deposited that have not been withdrawn yet.
-    uint256 public totalDeposited;
-
-    constructor(StakingToken stakingToken_, StakingApp stakingApp_, address owner_) {
+    constructor(StakingToken stakingToken_, StakingNFT stakingNFT_, StakingApp stakingApp_, address owner_) {
         stakingToken = stakingToken_;
+        stakingNFT = stakingNFT_;
         stakingApp = stakingApp_;
         owner = owner_;
 
         // Pre-fund a set of staker addresses so the handler can deposit on their behalf.
         for (uint256 i = 0; i < 5; i++) {
-            address staker = vm.addr(100 + i);
-            stakers.push(staker);
+            stakers.push(vm.addr(100 + i));
         }
     }
 
@@ -33,7 +33,7 @@ contract StakingAppHandler is Test {
         stakerIndex_ = bound(stakerIndex_, 0, stakers.length - 1);
         address staker = stakers[stakerIndex_];
 
-        if (stakingApp.userBalance(staker) != 0) return;
+        if (stakingApp.userTokenId(staker) != 0) return;
 
         uint256 amount = stakingApp.fixStakingAmount();
 
@@ -46,27 +46,23 @@ contract StakingAppHandler is Test {
         IERC20(address(stakingToken)).approve(address(stakingApp), amount);
         stakingApp.depositToken(amount);
         vm.stopPrank();
-
-        totalDeposited += amount;
     }
 
     function withdraw(uint256 stakerIndex_) external {
         stakerIndex_ = bound(stakerIndex_, 0, stakers.length - 1);
         address staker = stakers[stakerIndex_];
 
-        if (stakingApp.userBalance(staker) == 0) return;
-
-        uint256 amount = stakingApp.userBalance(staker);
+        if (stakingApp.userTokenId(staker) == 0) return;
 
         vm.prank(staker);
         stakingApp.withdrawTokens();
-
-        totalDeposited -= amount;
     }
 }
 
 contract StakingAppInvariant is Test {
     StakingToken stakingToken;
+    StakingNFTDescriptor descriptor;
+    StakingNFT stakingNFT;
     StakingApp stakingApp;
     StakingAppHandler handler;
 
@@ -76,15 +72,26 @@ contract StakingAppInvariant is Test {
     uint256 rewardPerPeriod_ = 0.01 ether;
 
     function setUp() external {
+        uint64 nonce = vm.getNonce(address(this));
+        address predictedStakingApp = vm.computeCreateAddress(address(this), nonce + 3);
+
         stakingToken = new StakingToken("Staking Token", "STK", owner);
-        stakingApp = new StakingApp(address(stakingToken), owner, stakingPeriod_, fixedStakingAmount_, rewardPerPeriod_);
-        handler = new StakingAppHandler(stakingToken, stakingApp, owner);
+        descriptor = new StakingNFTDescriptor();
+        stakingNFT = new StakingNFT("STK Position", "STKP", predictedStakingApp, owner, address(descriptor));
+        stakingApp = new StakingApp(
+            address(stakingToken), address(stakingNFT), owner, stakingPeriod_, fixedStakingAmount_, rewardPerPeriod_
+        );
+        handler = new StakingAppHandler(stakingToken, stakingNFT, stakingApp, owner);
 
         targetContract(address(handler));
     }
 
-    // The contract's token balance must always cover all recorded deposits.
-    function invariant_tokenBalanceCoversTotalDeposited() external view {
-        assertGe(IERC20(address(stakingToken)).balanceOf(address(stakingApp)), handler.totalDeposited());
+    // Each open position holds exactly fixStakingAmount tokens; the contract's token balance
+    // must therefore equal the number of active NFTs times the fixed staking amount.
+    function invariant_nftSupplyTimesAmountEqualsTokenBalance() external view {
+        assertEq(
+            stakingNFT.totalPositions() * stakingApp.fixStakingAmount(),
+            IERC20(address(stakingToken)).balanceOf(address(stakingApp))
+        );
     }
 }
