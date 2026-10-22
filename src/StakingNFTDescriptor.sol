@@ -1,8 +1,8 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.24;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.24;
 
-import "../lib/openzeppelin-contracts/contracts/utils/Base64.sol";
-import "../lib/openzeppelin-contracts/contracts/utils/Strings.sol";
+import "@openzeppelin/contracts/utils/Base64.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 import "./ITokenURIDescriptor.sol";
 
 /// @title StakingNFTDescriptor

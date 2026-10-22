@@ -211,3 +211,4 @@ StakingApp   : (pendiente)
 | 2026-10-19 | 1 | Single source of truth: nextTokenId() eliminado, tokenId solo desde mint() return |
 | 2026-10-19 | 1 | depositToken order: lastActivity → mint() → userTokenId → safeTransferFrom (CEI + single updater) |
 | 2026-10-19 | 1 | CLAUDE.md: principios de ingeniería actualizados — sin comentarios de flujo, sin over-engineering, trilemma CEI documentado |
+| 2026-10-22 | 1 | Hardening: solc/pragma fijo 0.8.24, MIT, optimizer, [fuzz]/[invariant]/[profile.ci], remappings, ZeroAddress/ZeroAmount/InvalidStakingPeriod, 2 invariantes nuevos, umbral cobertura en CI, slither.config.json, SECURITY.md (62 tests) |

@@ -5,7 +5,7 @@ A fixed-amount ERC20 staking protocol on Ethereum. Users lock a fixed token amou
 ![CI](https://github.com/sergiiogg7/staking-protocol/actions/workflows/test.yml/badge.svg)
 ![Solidity ^0.8.24](https://img.shields.io/badge/Solidity-%5E0.8.24-blue)
 ![Foundry](https://img.shields.io/badge/built%20with-Foundry-FF6B6B)
-![Tests](https://img.shields.io/badge/tests-34%20passing-green)
+![Tests](https://img.shields.io/badge/tests-62%20passing-green)
 ![License: UNLICENSED](https://img.shields.io/badge/license-UNLICENSED-lightgrey)
 
 ---
@@ -109,16 +109,16 @@ The reentrancy test includes a purpose-built `ReentrantAttacker` contract that a
 
 ## Testing
 
-34 tests across four suites:
+62 tests across five suites (`forge test`):
 
 | Suite | Type | Coverage |
 |---|---|---|
 | `StakingAppTest.t.sol` | Unit — happy path, reverts, access control, pause | `StakingApp`: 100% lines |
 | `StakingTokenTest.t.sol` | Unit — mint, distribute, access control | `StakingToken`: 100% lines |
 | `StakingAppFuzz.t.sol` | Fuzz — deposit amount boundaries, claim timing, period config | 256 runs per test |
-| `StakingAppInvariant.t.sol` | Invariant — token balance always covers active deposits | 256 sequences · 128,000 calls |
+| `StakingAppInvariant.t.sol` | Invariant — token balance, ETH balance and NFT ownership consistency | 256 sequences · 32,768 calls each |
 
-CI runs `forge fmt --check`, `forge build`, `forge test`, `forge snapshot --check` and Slither static analysis on every push. The gas snapshot blocks any unreviewed gas regression from merging; Slither blocks any new finding in `src/`.
+CI runs `forge fmt --check`, `forge build`, `forge test` (higher fuzz runs via `FOUNDRY_PROFILE=ci`), a line-coverage gate of 95% on `src/`, `forge snapshot --check` and Slither static analysis on every push. See also [SECURITY.md](SECURITY.md). The gas snapshot blocks any unreviewed gas regression from merging; Slither blocks any new finding in `src/`.
 
 **Gas (median, production functions):**
 

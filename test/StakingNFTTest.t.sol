@@ -1,12 +1,12 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.24;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.24;
 
 import "forge-std/Test.sol";
 import "../src/StakingToken.sol";
 import "../src/StakingNFTDescriptor.sol";
 import "../src/StakingNFT.sol";
 import "../src/StakingApp.sol";
-import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {Unauthorized, NonexistentToken, InvalidDescriptor} from "../src/StakingNFT.sol";
 
@@ -43,7 +43,7 @@ contract StakingNFTTest is Test {
     function _createPosition(address user_) internal returns (uint256 tokenId_) {
         vm.startPrank(owner_);
         stakingToken.mint(fixedStakingAmount_);
-        stakingToken.transfer(user_, fixedStakingAmount_);
+        assertTrue(stakingToken.transfer(user_, fixedStakingAmount_));
         vm.stopPrank();
 
         vm.startPrank(user_);
@@ -249,10 +249,7 @@ contract StakingNFTTest is Test {
 
         // Assert — same content since both descriptors are identical implementations,
         // but the call now goes through the new contract address
-        assertEq(
-            keccak256(bytes(uriBefore)),
-            keccak256(bytes(uriAfter))
-        );
+        assertEq(keccak256(bytes(uriBefore)), keccak256(bytes(uriAfter)));
         assertEq(address(stakingNFT.descriptor()), address(newDescriptor));
     }
 

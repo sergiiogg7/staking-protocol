@@ -1,12 +1,12 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.24;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.24;
 
 import "forge-std/Test.sol";
 import "../src/StakingToken.sol";
 import "../src/StakingNFTDescriptor.sol";
 import "../src/StakingNFT.sol";
 import "../src/StakingApp.sol";
-import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {
     IncorrectAmount,
@@ -26,7 +26,7 @@ contract StakingAppTest is Test {
     address owner_ = vm.addr(1);
     address randomUser = vm.addr(2);
     address newOwner = vm.addr(5);
-    uint256 stakingPeriod_ = 100_000_000_000_000;
+    uint256 stakingPeriod_ = 30 days;
     uint256 fixedStakingAmount_ = 10;
     uint256 rewardPerPeriod_ = 1 ether;
 
@@ -79,12 +79,12 @@ contract StakingAppTest is Test {
         // Arrange / Act / Assert
         vm.expectRevert();
         vm.prank(randomUser);
-        stakingApp.changeStakingPeriod(1);
+        stakingApp.changeStakingPeriod(1 days);
     }
 
     function test_changeStakingPeriod_byOwner_updatesValue() external {
         // Arrange
-        uint256 newPeriod = 1;
+        uint256 newPeriod = 1 days;
 
         // Act
         vm.prank(owner_);
@@ -92,6 +92,65 @@ contract StakingAppTest is Test {
 
         // Assert
         assertEq(stakingApp.stakingPeriod(), newPeriod);
+    }
+
+    function test_changeStakingPeriod_belowMin_revertsWithInvalidStakingPeriod() external {
+        // Arrange
+        uint256 tooShort = stakingApp.MIN_STAKING_PERIOD() - 1;
+
+        // Act / Assert
+        vm.expectRevert(abi.encodeWithSelector(InvalidStakingPeriod.selector, tooShort));
+        vm.prank(owner_);
+        stakingApp.changeStakingPeriod(tooShort);
+    }
+
+    function test_changeStakingPeriod_aboveMax_revertsWithInvalidStakingPeriod() external {
+        // Arrange
+        uint256 tooLong = stakingApp.MAX_STAKING_PERIOD() + 1;
+
+        // Act / Assert
+        vm.expectRevert(abi.encodeWithSelector(InvalidStakingPeriod.selector, tooLong));
+        vm.prank(owner_);
+        stakingApp.changeStakingPeriod(tooLong);
+    }
+
+    // -------------------------------------------------------------------------
+    // constructor
+    // -------------------------------------------------------------------------
+
+    function test_constructor_withZeroStakingToken_revertsWithZeroAddress() external {
+        // Arrange / Act / Assert
+        vm.expectRevert(ZeroAddress.selector);
+        new StakingApp(address(0), address(stakingNFT), owner_, stakingPeriod_, fixedStakingAmount_, rewardPerPeriod_);
+    }
+
+    function test_constructor_withZeroStakingNFT_revertsWithZeroAddress() external {
+        // Arrange / Act / Assert
+        vm.expectRevert(ZeroAddress.selector);
+        new StakingApp(address(stakingToken), address(0), owner_, stakingPeriod_, fixedStakingAmount_, rewardPerPeriod_);
+    }
+
+    function test_constructor_withZeroFixStakingAmount_revertsWithZeroAmount() external {
+        // Arrange / Act / Assert
+        vm.expectRevert(ZeroAmount.selector);
+        new StakingApp(address(stakingToken), address(stakingNFT), owner_, stakingPeriod_, 0, rewardPerPeriod_);
+    }
+
+    function test_constructor_withZeroReward_revertsWithZeroAmount() external {
+        // Arrange / Act / Assert
+        vm.expectRevert(ZeroAmount.selector);
+        new StakingApp(address(stakingToken), address(stakingNFT), owner_, stakingPeriod_, fixedStakingAmount_, 0);
+    }
+
+    function test_constructor_withInvalidPeriod_revertsWithInvalidStakingPeriod() external {
+        // Arrange
+        uint256 invalid = 0;
+
+        // Act / Assert
+        vm.expectRevert(abi.encodeWithSelector(InvalidStakingPeriod.selector, invalid));
+        new StakingApp(
+            address(stakingToken), address(stakingNFT), owner_, invalid, fixedStakingAmount_, rewardPerPeriod_
+        );
     }
 
     // -------------------------------------------------------------------------

@@ -1,11 +1,11 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.24;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.24;
 
-import "../lib/openzeppelin-contracts/contracts/access/Ownable2Step.sol";
-import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import "../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-import "../lib/openzeppelin-contracts/contracts/utils/Pausable.sol";
-import "../lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./StakingNFT.sol";
 
 /// @notice Thrown when the deposited amount does not match the required fixed staking amount.
@@ -26,12 +26,28 @@ error StakingPeriodNotElapsed(uint256 remaining);
 /// @notice Thrown when the ETH transfer to the staker fails.
 error EthTransferFailed();
 
+/// @notice Thrown when a required address argument is the zero address.
+error ZeroAddress();
+
+/// @notice Thrown when a required amount argument is zero.
+error ZeroAmount();
+
+/// @notice Thrown when a staking period falls outside the allowed bounds.
+/// @param provided The rejected staking period in seconds.
+error InvalidStakingPeriod(uint256 provided);
+
 /// @title StakingApp
 /// @notice Fixed-amount ERC20 staking contract that rewards stakers with ETH after each completed period.
 ///         Each active position is represented by an ERC-721 NFT minted on deposit and burned on withdrawal.
 /// @dev Inherits Ownable2Step, ReentrancyGuard, and Pausable from OpenZeppelin v5.
 contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
+
+    /// @notice Shortest staking period the owner may configure, in seconds.
+    uint256 public constant MIN_STAKING_PERIOD = 1 minutes;
+
+    /// @notice Longest staking period the owner may configure, in seconds.
+    uint256 public constant MAX_STAKING_PERIOD = 365 days;
 
     /// @notice The ERC20 token accepted for staking.
     IERC20 public immutable stakingToken;
@@ -95,6 +111,10 @@ contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
         uint256 fixStakingAmount_,
         uint256 rewardPerPeriod_
     ) Ownable(owner_) {
+        if (stakingToken_ == address(0) || stakingNFT_ == address(0)) revert ZeroAddress();
+        if (fixStakingAmount_ == 0 || rewardPerPeriod_ == 0) revert ZeroAmount();
+        _validateStakingPeriod(stakingPeriod_);
+
         stakingToken = IERC20(stakingToken_);
         stakingNFT = StakingNFT(stakingNFT_);
         stakingPeriod = stakingPeriod_;
@@ -169,9 +189,18 @@ contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
 
     /// @notice Updates the required staking duration.
     /// @dev Takes effect immediately; users who have already deposited are subject to the new period.
+    ///      Reverts with {InvalidStakingPeriod} outside [`MIN_STAKING_PERIOD`, `MAX_STAKING_PERIOD`].
     /// @param stakingPeriod_ New staking period in seconds.
     function changeStakingPeriod(uint256 stakingPeriod_) external onlyOwner {
+        _validateStakingPeriod(stakingPeriod_);
         stakingPeriod = stakingPeriod_;
         emit ChangeStakingPeriod(stakingPeriod_);
+    }
+
+    /// @dev Reverts if `stakingPeriod_` is outside the allowed bounds.
+    function _validateStakingPeriod(uint256 stakingPeriod_) private pure {
+        if (stakingPeriod_ < MIN_STAKING_PERIOD || stakingPeriod_ > MAX_STAKING_PERIOD) {
+            revert InvalidStakingPeriod(stakingPeriod_);
+        }
     }
 }

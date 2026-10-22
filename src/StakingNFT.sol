@@ -1,8 +1,8 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.24;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.24;
 
-import "../lib/openzeppelin-contracts/contracts/access/Ownable.sol";
-import "../lib/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "./ITokenURIDescriptor.sol";
 
 /// @notice Thrown when a caller other than the authorized StakingApp attempts to mint or burn.
@@ -61,13 +61,10 @@ contract StakingNFT is ERC721, Ownable {
     /// @param stakingApp_ Address of the StakingApp contract authorized to mint and burn.
     /// @param owner_ Address that can update the descriptor.
     /// @param descriptor_ Initial renderer contract.
-    constructor(
-        string memory name_,
-        string memory symbol_,
-        address stakingApp_,
-        address owner_,
-        address descriptor_
-    ) ERC721(name_, symbol_) Ownable(owner_) {
+    constructor(string memory name_, string memory symbol_, address stakingApp_, address owner_, address descriptor_)
+        ERC721(name_, symbol_)
+        Ownable(owner_)
+    {
         if (descriptor_ == address(0)) revert InvalidDescriptor();
         stakingApp = stakingApp_;
         descriptor = ITokenURIDescriptor(descriptor_);

@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.24;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.24;
 
 import "forge-std/Script.sol";
 import "../src/StakingToken.sol";
@@ -13,11 +13,11 @@ import "../src/StakingApp.sol";
 contract LocalDeploy is Script {
     address constant OWNER = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266; // Anvil account #0
 
-    uint256 constant STAKING_PERIOD     = 90;        // 90 seconds — short enough to test claim
-    uint256 constant FIX_STAKING_AMOUNT = 1e18;      // 1 STK
-    uint256 constant REWARD_PER_PERIOD  = 0.01 ether;
-    uint256 constant TOKENS_PER_ACCOUNT = 100e18;    // 100 STK per account
-    uint256 constant ETH_FUND           = 2 ether;   // rewards pool
+    uint256 constant STAKING_PERIOD = 90; // 90 seconds — short enough to test claim
+    uint256 constant FIX_STAKING_AMOUNT = 1e18; // 1 STK
+    uint256 constant REWARD_PER_PERIOD = 0.01 ether;
+    uint256 constant TOKENS_PER_ACCOUNT = 100e18; // 100 STK per account
+    uint256 constant ETH_FUND = 2 ether; // rewards pool
 
     function run() external {
         vm.startBroadcast();
@@ -29,10 +29,8 @@ contract LocalDeploy is Script {
         StakingToken token = new StakingToken("Staking Token", "STK", OWNER);
         StakingNFTDescriptor descriptor = new StakingNFTDescriptor();
         StakingNFT nft = new StakingNFT("STK Position", "STKP", predictedApp, OWNER, address(descriptor));
-        StakingApp app = new StakingApp(
-            address(token), address(nft), OWNER,
-            STAKING_PERIOD, FIX_STAKING_AMOUNT, REWARD_PER_PERIOD
-        );
+        StakingApp app =
+            new StakingApp(address(token), address(nft), OWNER, STAKING_PERIOD, FIX_STAKING_AMOUNT, REWARD_PER_PERIOD);
 
         // Pre-fund all 10 Anvil accounts with 100 STK each.
         // Account #0 is the broadcaster/owner: mint gives tokens to it, then distribute to #1-#9.

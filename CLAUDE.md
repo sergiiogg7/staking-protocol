@@ -56,7 +56,8 @@ The invariant test uses a `StakingAppHandler` contract that wraps `StakingApp` c
 CI runs on every push and blocks merges on:
 - `forge fmt --check` — formatting
 - `forge build` — compilation
-- `forge test` — all tests passing
+- `forge test` — all tests passing (`ci` profile: 5000 fuzz runs)
+- Line coverage of `src/` >= 95% (`forge coverage --no-match-coverage "script|test"`)
 - `forge snapshot --check` — any gas regression vs `.gas-snapshot`
 - Slither static analysis — any new finding in `src/` (dependencies excluded)
 

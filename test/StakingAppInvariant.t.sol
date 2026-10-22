@@ -1,12 +1,12 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.24;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.24;
 
 import "forge-std/Test.sol";
 import "../src/StakingToken.sol";
 import "../src/StakingNFTDescriptor.sol";
 import "../src/StakingNFT.sol";
 import "../src/StakingApp.sol";
-import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // Handler wraps StakingApp calls so Foundry can call them with valid state.
 contract StakingAppHandler is Test {
@@ -16,6 +16,9 @@ contract StakingAppHandler is Test {
 
     address public owner;
     address[] public stakers;
+
+    uint256 public ghostEthFunded;
+    uint256 public ghostEthClaimed;
 
     constructor(StakingToken stakingToken_, StakingNFT stakingNFT_, StakingApp stakingApp_, address owner_) {
         stakingToken = stakingToken_;
@@ -39,7 +42,7 @@ contract StakingAppHandler is Test {
 
         vm.startPrank(owner);
         stakingToken.mint(amount);
-        stakingToken.transfer(staker, amount);
+        assertTrue(stakingToken.transfer(staker, amount));
         vm.stopPrank();
 
         vm.startPrank(staker);
@@ -56,6 +59,34 @@ contract StakingAppHandler is Test {
 
         vm.prank(staker);
         stakingApp.withdrawTokens();
+    }
+
+    function claim(uint256 stakerIndex_, uint256 elapsed_) external {
+        stakerIndex_ = bound(stakerIndex_, 0, stakers.length - 1);
+        address staker = stakers[stakerIndex_];
+
+        if (stakingApp.userTokenId(staker) == 0) return;
+
+        elapsed_ = bound(elapsed_, 0, 60 days);
+        vm.warp(block.timestamp + elapsed_);
+        if (block.timestamp - stakingApp.lastActivity(staker) < stakingApp.stakingPeriod()) return;
+
+        uint256 reward = stakingApp.rewardPerPeriod();
+        if (address(stakingApp).balance < reward) {
+            vm.deal(owner, reward);
+            vm.prank(owner);
+            (bool ok,) = address(stakingApp).call{value: reward}("");
+            assertTrue(ok);
+            ghostEthFunded += reward;
+        }
+
+        vm.prank(staker);
+        stakingApp.claimRewards();
+        ghostEthClaimed += reward;
+    }
+
+    function stakersLength() external view returns (uint256) {
+        return stakers.length;
     }
 }
 
@@ -93,5 +124,27 @@ contract StakingAppInvariant is Test {
             stakingNFT.totalPositions() * stakingApp.fixStakingAmount(),
             IERC20(address(stakingToken)).balanceOf(address(stakingApp))
         );
+    }
+
+    // The app's ETH balance is exactly what the owner funded minus what stakers claimed.
+    function invariant_ethBalanceEqualsFundedMinusClaimed() external view {
+        assertEq(address(stakingApp).balance, handler.ghostEthFunded() - handler.ghostEthClaimed());
+    }
+
+    // userTokenId and NFT ownership never diverge: a staker owns their tracked NFT, or no NFT at all.
+    function invariant_userTokenIdMatchesNftOwnership() external view {
+        uint256 active;
+        for (uint256 i = 0; i < handler.stakersLength(); i++) {
+            address staker = handler.stakers(i);
+            uint256 tokenId = stakingApp.userTokenId(staker);
+            if (tokenId == 0) {
+                assertEq(stakingNFT.balanceOf(staker), 0);
+            } else {
+                assertEq(stakingNFT.ownerOf(tokenId), staker);
+                assertEq(stakingNFT.balanceOf(staker), 1);
+                active++;
+            }
+        }
+        assertEq(active, stakingNFT.totalPositions());
     }
 }

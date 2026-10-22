@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.24;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.24;
 
 import "forge-std/Test.sol";
 import "../src/StakingToken.sol";
@@ -7,7 +7,7 @@ import "../src/StakingNFTDescriptor.sol";
 import "../src/StakingNFT.sol";
 import "../src/StakingApp.sol";
 import {IncorrectAmount, StakingPeriodNotElapsed} from "../src/StakingApp.sol";
-import "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract StakingAppFuzz is Test {
     StakingToken stakingToken;
@@ -36,7 +36,7 @@ contract StakingAppFuzz is Test {
     function _fundAndApprove(address user_, uint256 amount_) internal {
         vm.startPrank(owner_);
         stakingToken.mint(amount_);
-        stakingToken.transfer(user_, amount_);
+        assertTrue(stakingToken.transfer(user_, amount_));
         vm.stopPrank();
 
         vm.prank(user_);
@@ -71,13 +71,28 @@ contract StakingAppFuzz is Test {
         stakingApp.claimRewards();
     }
 
-    // The owner can set any staking period and it must be stored correctly.
-    function testFuzz_changeStakingPeriod_byOwner_storesAnyValue(uint256 newPeriod_) external {
-        // Arrange / Act
+    // The owner can set any in-bounds staking period and it must be stored correctly.
+    function testFuzz_changeStakingPeriod_byOwner_storesAnyValidValue(uint256 newPeriod_) external {
+        // Arrange
+        newPeriod_ = bound(newPeriod_, stakingApp.MIN_STAKING_PERIOD(), stakingApp.MAX_STAKING_PERIOD());
+
+        // Act
         vm.prank(owner_);
         stakingApp.changeStakingPeriod(newPeriod_);
 
         // Assert
         assertEq(stakingApp.stakingPeriod(), newPeriod_);
+    }
+
+    // Any out-of-bounds staking period must revert and leave the stored value untouched.
+    function testFuzz_changeStakingPeriod_outOfBounds_reverts(uint256 newPeriod_) external {
+        // Arrange
+        vm.assume(newPeriod_ < stakingApp.MIN_STAKING_PERIOD() || newPeriod_ > stakingApp.MAX_STAKING_PERIOD());
+
+        // Act / Assert
+        vm.expectRevert(abi.encodeWithSelector(InvalidStakingPeriod.selector, newPeriod_));
+        vm.prank(owner_);
+        stakingApp.changeStakingPeriod(newPeriod_);
+        assertEq(stakingApp.stakingPeriod(), stakingPeriod_);
     }
 }
