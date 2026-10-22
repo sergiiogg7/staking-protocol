@@ -86,12 +86,11 @@ Este proyecto tiene función de aprendizaje. Antes de implementar cualquier conc
 
 ## Skills disponibles
 
-- **`design-taste-frontend`** — UI con dirección artística real y verificación visual en navegador. Usar al inicio de la Fase 3. Instalar: `/plugin marketplace add Leonxlnx/taste-skill`
-- **`react-best-practices`** — 40+ reglas de optimización para React y Next.js. Aplicar durante toda la Fase 3. Instalar: `npx skills add vercel-labs/agent-skills --skill react-best-practices -a claude-code`
-- **`web-design-guidelines`** — 100+ reglas de accesibilidad, UX y rendimiento. Usar junto a `design-taste-frontend` para revisar resultados. Instalar: `npx skills add vercel-labs/agent-skills --skill web-design-guidelines -a claude-code`
-- **`composition-patterns`** — patrones de composición React para evitar props bombing. Aplicar en componentes compartidos y panel admin. Instalar: `npx skills add vercel-labs/agent-skills --skill composition-patterns -a claude-code`
-- **`vercel-deploy-claimable`** — despliega el frontend a Vercel y devuelve URL pública lista para compartir con recruiters. Usar al final de la Fase 3. Instalar: `npx skills add vercel-labs/agent-skills --skill vercel-deploy-claimable -a claude-code`
-- **`find-skills`** — descubre skills por palabra clave. Usar antes de iniciar el frontend. Instalar: `npx skills add vercel-labs/agent-skills --skill find-skills -a claude-code`
+- **`design-taste-frontend`** — UI con dirección artística real y verificación visual en navegador. Usar al inicio de la Fase 3. Instalar: `/plugin marketplace add Leonxlnx/taste-skill` (comando manual en el prompt)
+- **`vercel-react-best-practices`** ✅ — 40+ reglas de optimización para React y Next.js. Aplicar durante toda la Fase 3.
+- **`web-design-guidelines`** ✅ — 100+ reglas de accesibilidad, UX y rendimiento. Usar junto a `design-taste-frontend` para revisar resultados.
+- **`vercel-composition-patterns`** ✅ — patrones de composición React para evitar props bombing. Aplicar en componentes compartidos y panel admin.
+- **`deploy-to-vercel`** ✅ — despliega el frontend a Vercel y devuelve URL pública lista para compartir con recruiters. Usar al final de la Fase 3.
 
 ## Git Conventions
 
