@@ -36,7 +36,7 @@ forge script script/Deploy.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY -
 - **`src/StakingNFTDescriptor.sol`** — renderer concreto. SVG on-chain con los datos de la posición.
 
 ### Frontend (Fase 3)
-Stack: Next.js 16 + wagmi v2 + viem v2 + RainbowKit v2 + Tailwind v4. Tres rutas: `/` (My Position), `/activity` (event log + Chainlink ETH/USD), `/admin` (owner panel). El frontend vive en `/frontend` dentro del mismo repo.
+Se construye desde cero con viem v2 + wagmi v2, paso a paso y con enfoque de mentoría (framework por decidir). Tres rutas previstas: `/` (My Position), `/activity` (event log + Chainlink ETH/USD), `/admin` (owner panel). Vivirá en `/frontend` dentro del mismo repo. Scaffold-eth 2 se probó y se descartó.
 
 ## Testing
 

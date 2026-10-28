@@ -25,7 +25,7 @@
 ## Decisiones de arquitectura
 
 - **EIP-721 como recibo de posición**: al depositar tokens, se mintea un NFT al usuario que representa su posición (stakeAmount + timestamp). Quien tenga el NFT puede hacer claim y withdraw. Patrón usado en producción por Uniswap v3.
-- **Frontend**: scaffold-eth 2 (wagmi v2 + viem + Next.js) conectado a Sepolia.
+- **Frontend**: construido desde cero, paso a paso, con viem + wagmi v2 (se descartó scaffold-eth 2 para entender cada integración). Framework (Next.js o Vite + React) por decidir. Conectado a Sepolia.
 - **Chainlink**: price feed ETH/USD para mostrar el valor en dólares de las rewards.
 - **L2**: deploy en Base Sepolia o Arbitrum Sepolia además de Sepolia mainnet-test.
 - **Sin EIP-712 / UUPS en esta iteración**: mantener el contrato enfocado y auditable.
@@ -115,11 +115,14 @@
 
 > Objetivo: contratos desplegados en testnet pública, verificados en Etherscan.
 
-- 🔲 Actualizar `script/Deploy.s.sol` para desplegar también `StakingNFT`
+- ✅ `script/Deploy.s.sol` despliega token, descriptor, NFT y app (la dirección de `StakingApp` se predice por nonce)
+- ✅ Deploy local en Anvil con `LocalDeploy.s.sol` y `dev.sh` (chain 31337)
+- 🔲 Añadir `ETHERSCAN_API_KEY` y `SEPOLIA_RPC_URL` a `.env.example` y a `[etherscan]` / `[rpc_endpoints]` de `foundry.toml`
 - 🔲 Deploy en Sepolia con `forge script --broadcast --verify`
-- 🔲 Verificar ambos contratos en Etherscan Sepolia
-- 🔲 Actualizar `.env.example` con las nuevas variables necesarias
-- 🔲 Documentar addresses desplegadas en este archivo
+- 🔲 Verificar los cuatro contratos (token, descriptor, NFT, app) en Etherscan Sepolia
+- 🔲 Documentar addresses desplegadas en este archivo y en el README
+
+> Verificación: se hace desde la raíz con `--verify` en el propio `forge script`.
 
 **Addresses Sepolia:**
 ```
@@ -130,15 +133,19 @@ StakingApp   : (pendiente)
 
 ---
 
-## Fase 3 — Frontend (scaffold-eth 2)
+## Fase 3 — Frontend desde cero (viem + wagmi)
 
-> Objetivo: app funcional conectada a Sepolia. Tres rutas, wallet persistente.
+> Objetivo: app funcional conectada a Sepolia. Tres rutas, wallet persistente. Se construye por partes y con enfoque de mentoría: cada integración (RPC, ABI, wallet, hooks) se entiende antes de escribirla.
 
 ### Setup
 
-- ✅ Inicializar scaffold-eth 2 en `/frontend`
-- 🔲 Conectar ABIs generados por Foundry (`out/`) al frontend
-- 🔲 Configurar red Sepolia como default
+- ✅ Scaffold-eth 2 eliminado (revert de `5017336`): se parte de cero
+- 🔲 Elegir framework y crear `/frontend` mínimo
+- 🔲 Cliente viem: leer del contrato en Anvil (`readContract`) para entender RPC + ABI + dirección
+- 🔲 Añadir wagmi: config, conectores de wallet y primeros hooks
+- 🔲 Importar ABIs de `out/` como `as const`
+- 🔲 Prueba E2E en Anvil con `dev.sh`: fondear, aprobar, depositar, reclamar, retirar
+- 🔲 Configurar Sepolia
 - ✅ Instalar skills antes de arrancar la Fase 3:
   ```bash
   /plugin marketplace add Leonxlnx/taste-skill   # ejecutar manualmente en el prompt
@@ -157,7 +164,7 @@ StakingApp   : (pendiente)
 
 ### Ruta `/` — My Position
 
-- 🔲 Conectar wallet (RainbowKit incluido en scaffold-eth 2)
+- 🔲 Conectar wallet (conectores de wagmi)
 - 🔲 Mostrar estado: sin posición / posición activa
 - 🔲 Si tiene posición: mostrar NFT (imagen SVG generada on-chain), tokens stakeados, countdown al próximo claim
 - 🔲 Botones: `Deposit`, `Claim` (disabled hasta que el período haya pasado), `Withdraw`
@@ -212,3 +219,5 @@ StakingApp   : (pendiente)
 | 2026-10-19 | 1 | depositToken order: lastActivity → mint() → userTokenId → safeTransferFrom (CEI + single updater) |
 | 2026-10-19 | 1 | CLAUDE.md: principios de ingeniería actualizados — sin comentarios de flujo, sin over-engineering, trilemma CEI documentado |
 | 2026-10-22 | 1 | Hardening: solc/pragma fijo 0.8.24, MIT, optimizer, [fuzz]/[invariant]/[profile.ci], remappings, ZeroAddress/ZeroAmount/InvalidStakingPeriod, 2 invariantes nuevos, umbral cobertura en CI, slither.config.json, SECURITY.md (62 tests) |
+| 2026-10-25 | 2-3 | Plan revisado: Deploy.s.sol ya incluye NFT y descriptor; estado real del frontend y de la verificación |
+| 2026-10-28 | 3 | Scaffold-eth 2 eliminado con revert de `5017336`. Fase 3 pasa a frontend desde cero con viem + wagmi |
