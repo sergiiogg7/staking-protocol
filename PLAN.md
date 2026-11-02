@@ -115,11 +115,11 @@
 
 > Objetivo: contratos desplegados en testnet pública, verificados en Etherscan.
 
-- ✅ `script/Deploy.s.sol` despliega token, descriptor, NFT y app (la dirección de `StakingApp` se predice por nonce)
+- ✅ `script/Deploy.s.sol` despliega token, descriptor y app; `StakingApp` despliega su propio `StakingNFT` en el constructor (sin predicción de nonce)
 - ✅ Deploy local en Anvil con `LocalDeploy.s.sol` y `dev.sh` (chain 31337)
 - 🔲 Añadir `ETHERSCAN_API_KEY` y `SEPOLIA_RPC_URL` a `.env.example` y a `[etherscan]` / `[rpc_endpoints]` de `foundry.toml`
 - 🔲 Deploy en Sepolia con `forge script --broadcast --verify`
-- 🔲 Verificar los cuatro contratos (token, descriptor, NFT, app) en Etherscan Sepolia
+- 🔲 Verificar los cuatro contratos (token, descriptor, NFT, app) en Etherscan Sepolia (el NFT lo crea `StakingApp`: se verifica aparte con sus argumentos de constructor)
 - 🔲 Documentar addresses desplegadas en este archivo y en el README
 
 > Verificación: se hace desde la raíz con `--verify` en el propio `forge script`.
@@ -221,3 +221,5 @@ StakingApp   : (pendiente)
 | 2026-10-22 | 1 | Hardening: solc/pragma fijo 0.8.24, MIT, optimizer, [fuzz]/[invariant]/[profile.ci], remappings, ZeroAddress/ZeroAmount/InvalidStakingPeriod, 2 invariantes nuevos, umbral cobertura en CI, slither.config.json, SECURITY.md (62 tests) |
 | 2026-10-25 | 2-3 | Plan revisado: Deploy.s.sol ya incluye NFT y descriptor; estado real del frontend y de la verificación |
 | 2026-10-28 | 3 | Scaffold-eth 2 eliminado con revert de `5017336`. Fase 3 pasa a frontend desde cero con viem + wagmi |
+| 2026-10-28 | 1 | Dependencia circular App/NFT resuelta: `StakingApp` despliega `StakingNFT` en su constructor (`address(this)`), constructor con `descriptor_`, `nftName_`, `nftSymbol_`. Predicción de nonce eliminada de 4 tests y 2 scripts. 63 tests, `.gas-snapshot` regenerado |
+| 2026-10-28 | 1 | NFT como título al portador: estado por `tokenId` (`lastActivity[tokenId]`), `claimRewards(tokenId)` / `withdrawTokens(tokenId)` autorizados con `ownerOf`, `userTokenId`, `AlreadyDeposited` y `NotStaking` eliminados, nuevo error `NotPositionOwner`, `depositToken` devuelve el `tokenId`. Handler de invariantes con transferencias. 72 tests, 100 % cobertura |

@@ -21,7 +21,8 @@ error InvalidDescriptor();
 /// @dev Only the StakingApp contract can mint and burn. Metadata is fully on-chain and
 ///      rendered by an external ITokenURIDescriptor contract so the visual design can be
 ///      updated without modifying this contract or its ownership records.
-///      Token IDs start at 1; 0 is reserved as the "no position" sentinel in StakingApp.
+///      Token IDs start at 1, so 0 is never a valid position.
+///      The NFT is transferable and StakingApp treats its owner as the controller of the position.
 contract StakingNFT is ERC721, Ownable {
     /// @notice The StakingApp contract that is the sole authorized minter and burner.
     address public immutable stakingApp;

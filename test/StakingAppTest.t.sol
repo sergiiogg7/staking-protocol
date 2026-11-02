@@ -8,14 +8,8 @@ import "../src/StakingNFT.sol";
 import "../src/StakingApp.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {
-    IncorrectAmount,
-    AlreadyDeposited,
-    NotStaking,
-    StakingPeriodNotElapsed,
-    EthTransferFailed
-} from "../src/StakingApp.sol";
-import {Unauthorized} from "../src/StakingNFT.sol";
+import {IncorrectAmount, NotPositionOwner, StakingPeriodNotElapsed, EthTransferFailed} from "../src/StakingApp.sol";
+import {Unauthorized, InvalidDescriptor} from "../src/StakingNFT.sol";
 
 contract StakingAppTest is Test {
     StakingToken stakingToken;
@@ -26,26 +20,37 @@ contract StakingAppTest is Test {
     address owner_ = vm.addr(1);
     address randomUser = vm.addr(2);
     address newOwner = vm.addr(5);
+    address otherUser = vm.addr(6);
     uint256 stakingPeriod_ = 30 days;
     uint256 fixedStakingAmount_ = 10;
     uint256 rewardPerPeriod_ = 1 ether;
 
     function setUp() external {
-        // Deploy order: token(nonce+0), descriptor(nonce+1), nft(nonce+2), app(nonce+3).
-        uint64 nonce = vm.getNonce(address(this));
-        address predictedStakingApp = vm.computeCreateAddress(address(this), nonce + 3);
-
         stakingToken = new StakingToken("Staking Token", "STK", owner_);
         descriptor = new StakingNFTDescriptor();
-        stakingNFT = new StakingNFT("STK Position", "STKP", predictedStakingApp, owner_, address(descriptor));
         stakingApp = new StakingApp(
-            address(stakingToken), address(stakingNFT), owner_, stakingPeriod_, fixedStakingAmount_, rewardPerPeriod_
+            address(stakingToken),
+            address(descriptor),
+            owner_,
+            stakingPeriod_,
+            fixedStakingAmount_,
+            rewardPerPeriod_,
+            "STK Position",
+            "STKP"
         );
+        stakingNFT = stakingApp.stakingNFT();
     }
 
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    function _deployApp(address token_, address descriptor_, uint256 period_, uint256 fixedAmount_, uint256 reward_)
+        internal
+        returns (StakingApp)
+    {
+        return new StakingApp(token_, descriptor_, owner_, period_, fixedAmount_, reward_, "STK Position", "STKP");
+    }
 
     function _fundUser(address user_, uint256 amount_) internal {
         vm.startPrank(owner_);
@@ -54,12 +59,12 @@ contract StakingAppTest is Test {
         vm.stopPrank();
     }
 
-    function _stakeAs(address user_) internal {
+    function _stakeAs(address user_) internal returns (uint256 tokenId_) {
         uint256 amount = stakingApp.fixStakingAmount();
         _fundUser(user_, amount);
         vm.startPrank(user_);
         IERC20(address(stakingToken)).approve(address(stakingApp), amount);
-        stakingApp.depositToken(amount);
+        tokenId_ = stakingApp.depositToken(amount);
         vm.stopPrank();
     }
 
@@ -121,25 +126,25 @@ contract StakingAppTest is Test {
     function test_constructor_withZeroStakingToken_revertsWithZeroAddress() external {
         // Arrange / Act / Assert
         vm.expectRevert(ZeroAddress.selector);
-        new StakingApp(address(0), address(stakingNFT), owner_, stakingPeriod_, fixedStakingAmount_, rewardPerPeriod_);
+        _deployApp(address(0), address(descriptor), stakingPeriod_, fixedStakingAmount_, rewardPerPeriod_);
     }
 
-    function test_constructor_withZeroStakingNFT_revertsWithZeroAddress() external {
+    function test_constructor_withZeroDescriptor_revertsWithInvalidDescriptor() external {
         // Arrange / Act / Assert
-        vm.expectRevert(ZeroAddress.selector);
-        new StakingApp(address(stakingToken), address(0), owner_, stakingPeriod_, fixedStakingAmount_, rewardPerPeriod_);
+        vm.expectRevert(InvalidDescriptor.selector);
+        _deployApp(address(stakingToken), address(0), stakingPeriod_, fixedStakingAmount_, rewardPerPeriod_);
     }
 
     function test_constructor_withZeroFixStakingAmount_revertsWithZeroAmount() external {
         // Arrange / Act / Assert
         vm.expectRevert(ZeroAmount.selector);
-        new StakingApp(address(stakingToken), address(stakingNFT), owner_, stakingPeriod_, 0, rewardPerPeriod_);
+        _deployApp(address(stakingToken), address(descriptor), stakingPeriod_, 0, rewardPerPeriod_);
     }
 
     function test_constructor_withZeroReward_revertsWithZeroAmount() external {
         // Arrange / Act / Assert
         vm.expectRevert(ZeroAmount.selector);
-        new StakingApp(address(stakingToken), address(stakingNFT), owner_, stakingPeriod_, fixedStakingAmount_, 0);
+        _deployApp(address(stakingToken), address(descriptor), stakingPeriod_, fixedStakingAmount_, 0);
     }
 
     function test_constructor_withInvalidPeriod_revertsWithInvalidStakingPeriod() external {
@@ -148,9 +153,14 @@ contract StakingAppTest is Test {
 
         // Act / Assert
         vm.expectRevert(abi.encodeWithSelector(InvalidStakingPeriod.selector, invalid));
-        new StakingApp(
-            address(stakingToken), address(stakingNFT), owner_, invalid, fixedStakingAmount_, rewardPerPeriod_
-        );
+        _deployApp(address(stakingToken), address(descriptor), invalid, fixedStakingAmount_, rewardPerPeriod_);
+    }
+
+    function test_constructor_deploysNftWiredToApp() external view {
+        // Assert
+        assertEq(stakingNFT.stakingApp(), address(stakingApp));
+        assertEq(stakingNFT.owner(), owner_);
+        assertEq(address(stakingNFT.descriptor()), address(descriptor));
     }
 
     // -------------------------------------------------------------------------
@@ -190,90 +200,128 @@ contract StakingAppTest is Test {
         // Act
         vm.startPrank(randomUser);
         IERC20(address(stakingToken)).approve(address(stakingApp), tokenAmount);
-        stakingApp.depositToken(tokenAmount);
+        uint256 tokenId = stakingApp.depositToken(tokenAmount);
         vm.stopPrank();
 
         // Assert
-        uint256 tokenId = stakingApp.userTokenId(randomUser);
         assertGt(tokenId, 0);
         assertEq(stakingNFT.ownerOf(tokenId), randomUser);
-        assertEq(stakingApp.lastActivity(randomUser), block.timestamp);
+        assertEq(stakingApp.lastActivity(tokenId), block.timestamp);
     }
 
-    function test_depositToken_whenAlreadyDeposited_revertsWithAlreadyDeposited() external {
+    function test_depositToken_twiceBySameAddress_mintsTwoIndependentPositions() external {
         // Arrange
-        _stakeAs(randomUser);
-        _fundUser(randomUser, fixedStakingAmount_);
+        uint256 firstTokenId = _stakeAs(randomUser);
 
-        // Act / Assert
-        vm.startPrank(randomUser);
-        IERC20(address(stakingToken)).approve(address(stakingApp), fixedStakingAmount_);
-        vm.expectRevert(AlreadyDeposited.selector);
-        stakingApp.depositToken(fixedStakingAmount_);
-        vm.stopPrank();
+        // Act
+        uint256 secondTokenId = _stakeAs(randomUser);
+
+        // Assert
+        assertEq(secondTokenId, firstTokenId + 1);
+        assertEq(stakingNFT.balanceOf(randomUser), 2);
+        assertEq(stakingNFT.totalPositions(), 2);
     }
 
     // -------------------------------------------------------------------------
     // withdrawTokens
     // -------------------------------------------------------------------------
 
-    function test_withdrawTokens_whenNotStaking_revertsWithNotStaking() external {
-        // Arrange / Act / Assert
+    function test_withdrawTokens_byNonOwner_revertsWithNotPositionOwner() external {
+        // Arrange
+        uint256 tokenId = _stakeAs(randomUser);
+
+        // Act / Assert
+        vm.prank(otherUser);
+        vm.expectRevert(abi.encodeWithSelector(NotPositionOwner.selector, tokenId, otherUser));
+        stakingApp.withdrawTokens(tokenId);
+    }
+
+    function test_withdrawTokens_forNonexistentToken_revertsWithERC721NonexistentToken() external {
+        // Arrange
+        uint256 nonexistentTokenId = 999;
+
+        // Act / Assert
         vm.prank(randomUser);
-        vm.expectRevert(NotStaking.selector);
-        stakingApp.withdrawTokens();
+        vm.expectRevert(abi.encodeWithSignature("ERC721NonexistentToken(uint256)", nonexistentTokenId));
+        stakingApp.withdrawTokens(nonexistentTokenId);
     }
 
     function test_withdrawTokens_afterDeposit_returnsTokensAndBurnsNFT() external {
         // Arrange
-        _stakeAs(randomUser);
+        uint256 tokenId = _stakeAs(randomUser);
         uint256 tokenBalanceBefore = IERC20(address(stakingToken)).balanceOf(randomUser);
 
         // Act
         vm.prank(randomUser);
-        stakingApp.withdrawTokens();
+        stakingApp.withdrawTokens(tokenId);
 
         // Assert
         assertEq(IERC20(address(stakingToken)).balanceOf(randomUser), tokenBalanceBefore + fixedStakingAmount_);
-        assertEq(stakingApp.userTokenId(randomUser), 0);
+        assertEq(stakingApp.lastActivity(tokenId), 0);
         assertEq(stakingNFT.totalPositions(), 0);
+    }
+
+    function test_withdrawTokens_afterWithdraw_cannotBeRepeated() external {
+        // Arrange
+        uint256 tokenId = _stakeAs(randomUser);
+        vm.prank(randomUser);
+        stakingApp.withdrawTokens(tokenId);
+
+        // Act / Assert
+        vm.prank(randomUser);
+        vm.expectRevert(abi.encodeWithSignature("ERC721NonexistentToken(uint256)", tokenId));
+        stakingApp.withdrawTokens(tokenId);
     }
 
     // -------------------------------------------------------------------------
     // claimRewards
     // -------------------------------------------------------------------------
 
-    function test_claimRewards_whenNotStaking_revertsWithNotStaking() external {
-        // Arrange / Act / Assert
+    function test_claimRewards_byNonOwner_revertsWithNotPositionOwner() external {
+        // Arrange
+        uint256 tokenId = _stakeAs(randomUser);
+        vm.warp(block.timestamp + stakingPeriod_);
+
+        // Act / Assert
+        vm.prank(otherUser);
+        vm.expectRevert(abi.encodeWithSelector(NotPositionOwner.selector, tokenId, otherUser));
+        stakingApp.claimRewards(tokenId);
+    }
+
+    function test_claimRewards_forNonexistentToken_revertsWithERC721NonexistentToken() external {
+        // Arrange
+        uint256 nonexistentTokenId = 999;
+
+        // Act / Assert
         vm.prank(randomUser);
-        vm.expectRevert(NotStaking.selector);
-        stakingApp.claimRewards();
+        vm.expectRevert(abi.encodeWithSignature("ERC721NonexistentToken(uint256)", nonexistentTokenId));
+        stakingApp.claimRewards(nonexistentTokenId);
     }
 
     function test_claimRewards_beforePeriodElapses_revertsWithStakingPeriodNotElapsed() external {
         // Arrange
-        _stakeAs(randomUser);
+        uint256 tokenId = _stakeAs(randomUser);
 
         // Act / Assert
         vm.prank(randomUser);
         vm.expectRevert(abi.encodeWithSelector(StakingPeriodNotElapsed.selector, stakingPeriod_));
-        stakingApp.claimRewards();
+        stakingApp.claimRewards(tokenId);
     }
 
     function test_claimRewards_withNoEther_revertsWithEthTransferFailed() external {
         // Arrange
-        _stakeAs(randomUser);
+        uint256 tokenId = _stakeAs(randomUser);
         vm.warp(block.timestamp + stakingPeriod_);
 
         // Act / Assert
         vm.prank(randomUser);
         vm.expectRevert(EthTransferFailed.selector);
-        stakingApp.claimRewards();
+        stakingApp.claimRewards(tokenId);
     }
 
     function test_claimRewards_afterPeriodElapses_transfersRewardAndResetsTimer() external {
         // Arrange
-        _stakeAs(randomUser);
+        uint256 tokenId = _stakeAs(randomUser);
         _fundContractWithEth();
         vm.warp(block.timestamp + stakingPeriod_);
         uint256 ethBefore = address(randomUser).balance;
@@ -282,12 +330,86 @@ contract StakingAppTest is Test {
         vm.startPrank(randomUser);
         vm.expectEmit(true, false, false, true);
         emit StakingApp.RewardsClaimed(randomUser, rewardPerPeriod_);
-        stakingApp.claimRewards();
+        stakingApp.claimRewards(tokenId);
         vm.stopPrank();
 
         // Assert
         assertEq(address(randomUser).balance - ethBefore, rewardPerPeriod_);
-        assertEq(stakingApp.lastActivity(randomUser), block.timestamp);
+        assertEq(stakingApp.lastActivity(tokenId), block.timestamp);
+    }
+
+    // -------------------------------------------------------------------------
+    // Bearer semantics: the NFT owner controls the position
+    // -------------------------------------------------------------------------
+
+    function test_claimRewards_afterNftTransfer_newOwnerClaimsAndKeepsAccruedTime() external {
+        // Arrange
+        uint256 tokenId = _stakeAs(randomUser);
+        _fundContractWithEth();
+        vm.warp(block.timestamp + stakingPeriod_);
+        vm.prank(randomUser);
+        stakingNFT.transferFrom(randomUser, otherUser, tokenId);
+        uint256 ethBefore = otherUser.balance;
+
+        // Act
+        vm.prank(otherUser);
+        stakingApp.claimRewards(tokenId);
+
+        // Assert
+        assertEq(otherUser.balance - ethBefore, rewardPerPeriod_);
+    }
+
+    function test_claimRewards_afterNftTransfer_previousOwnerReverts() external {
+        // Arrange
+        uint256 tokenId = _stakeAs(randomUser);
+        vm.warp(block.timestamp + stakingPeriod_);
+        vm.prank(randomUser);
+        stakingNFT.transferFrom(randomUser, otherUser, tokenId);
+
+        // Act / Assert
+        vm.prank(randomUser);
+        vm.expectRevert(abi.encodeWithSelector(NotPositionOwner.selector, tokenId, randomUser));
+        stakingApp.claimRewards(tokenId);
+    }
+
+    function test_withdrawTokens_afterNftTransfer_newOwnerReceivesTokens() external {
+        // Arrange
+        uint256 tokenId = _stakeAs(randomUser);
+        vm.prank(randomUser);
+        stakingNFT.transferFrom(randomUser, otherUser, tokenId);
+
+        // Act
+        vm.prank(otherUser);
+        stakingApp.withdrawTokens(tokenId);
+
+        // Assert
+        assertEq(IERC20(address(stakingToken)).balanceOf(otherUser), fixedStakingAmount_);
+        assertEq(IERC20(address(stakingToken)).balanceOf(randomUser), 0);
+    }
+
+    function test_withdrawTokens_afterNftTransfer_previousOwnerReverts() external {
+        // Arrange
+        uint256 tokenId = _stakeAs(randomUser);
+        vm.prank(randomUser);
+        stakingNFT.transferFrom(randomUser, otherUser, tokenId);
+
+        // Act / Assert
+        vm.prank(randomUser);
+        vm.expectRevert(abi.encodeWithSelector(NotPositionOwner.selector, tokenId, randomUser));
+        stakingApp.withdrawTokens(tokenId);
+    }
+
+    function test_claimRewards_byApprovedOperator_revertsWithNotPositionOwner() external {
+        // Arrange
+        uint256 tokenId = _stakeAs(randomUser);
+        vm.warp(block.timestamp + stakingPeriod_);
+        vm.prank(randomUser);
+        stakingNFT.approve(otherUser, tokenId);
+
+        // Act / Assert
+        vm.prank(otherUser);
+        vm.expectRevert(abi.encodeWithSelector(NotPositionOwner.selector, tokenId, otherUser));
+        stakingApp.claimRewards(tokenId);
     }
 
     // -------------------------------------------------------------------------
@@ -381,7 +503,7 @@ contract StakingAppTest is Test {
 
     function test_claimRewards_whenPaused_revertsWithEnforcedPause() external {
         // Arrange
-        _stakeAs(randomUser);
+        uint256 tokenId = _stakeAs(randomUser);
         vm.prank(owner_);
         stakingApp.pause();
         vm.warp(block.timestamp + stakingPeriod_);
@@ -389,21 +511,21 @@ contract StakingAppTest is Test {
         // Act / Assert
         vm.prank(randomUser);
         vm.expectRevert(abi.encodeWithSignature("EnforcedPause()"));
-        stakingApp.claimRewards();
+        stakingApp.claimRewards(tokenId);
     }
 
     function test_withdrawTokens_whenPaused_succeeds() external {
         // Arrange
-        _stakeAs(randomUser);
+        uint256 tokenId = _stakeAs(randomUser);
         vm.prank(owner_);
         stakingApp.pause();
 
         // Act
         vm.prank(randomUser);
-        stakingApp.withdrawTokens();
+        stakingApp.withdrawTokens(tokenId);
 
         // Assert
-        assertEq(stakingApp.userTokenId(randomUser), 0);
+        assertEq(stakingApp.lastActivity(tokenId), 0);
     }
 
     function test_unpause_afterPause_restoresDeposit() external {
@@ -414,10 +536,10 @@ contract StakingAppTest is Test {
         vm.stopPrank();
 
         // Act
-        _stakeAs(randomUser);
+        uint256 tokenId = _stakeAs(randomUser);
 
         // Assert
-        assertGt(stakingApp.userTokenId(randomUser), 0);
+        assertEq(stakingNFT.ownerOf(tokenId), randomUser);
     }
 
     function test_unpause_byNonOwner_reverts() external {
@@ -434,6 +556,7 @@ contract StakingAppTest is Test {
 
 contract ReentrantAttacker {
     StakingApp public stakingApp;
+    uint256 public tokenId;
     bytes public lastRevertReason;
 
     constructor(address payable stakingApp_) {
@@ -441,15 +564,16 @@ contract ReentrantAttacker {
     }
 
     function deposit(uint256 amount_) external {
-        stakingApp.depositToken(amount_);
+        tokenId = stakingApp.depositToken(amount_);
     }
 
     function claim() external {
-        stakingApp.claimRewards();
+        stakingApp.claimRewards(tokenId);
     }
 
     receive() external payable {
-        (bool success, bytes memory data) = address(stakingApp).call(abi.encodeWithSignature("claimRewards()"));
+        (bool success, bytes memory data) =
+            address(stakingApp).call(abi.encodeWithSignature("claimRewards(uint256)", tokenId));
         if (!success) {
             lastRevertReason = data;
         }

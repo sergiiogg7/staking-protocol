@@ -22,7 +22,14 @@ This repository has not been externally audited. Security measures are listed be
 
 - `totalPositions * fixStakingAmount == stakingToken.balanceOf(StakingApp)`
 - `StakingApp.balance == ETH funded - ETH claimed`
-- `userTokenId[user]` and NFT ownership never diverge.
+- Every open position is a live NFT with `lastActivity[tokenId] != 0`, and the number of open positions equals `totalPositions`.
+
+## Design notes
+
+- **Positions are bearer instruments.** `claimRewards` and `withdrawTokens` authorize with `StakingNFT.ownerOf(tokenId)`. Whoever owns the NFT controls the position, including accrued staking time.
+- **Approved operators cannot act.** An address approved through `approve` or `setApprovalForAll` can transfer the NFT but cannot claim or withdraw on its behalf.
+- **Losing the NFT means losing the position.** A phished `setApprovalForAll` signature lets an attacker transfer the NFT and then withdraw the staked tokens.
+- **Selling a position with pending rewards.** The buyer collects the reward; the seller can claim just before selling. The price of a position should account for this.
 
 ## Reporting a vulnerability
 

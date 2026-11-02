@@ -21,9 +21,11 @@ The protocol consists of two contracts:
 
 1. Owner deploys both contracts, setting a 30-day staking period, a fixed amount of 1 STK, and a 0.01 ETH reward per period.
 2. Owner mints tokens and funds `StakingApp` with ETH.
-3. User approves `StakingApp` to spend 1 STK and calls `depositToken(1e18)`.
-4. After 30 days, user calls `claimRewards()` and receives 0.01 ETH. The staking period resets — the user can claim again after another 30 days without re-depositing.
-5. User can call `withdrawTokens()` at any time to recover the staked tokens, including while the contract is paused.
+3. User approves `StakingApp` to spend 1 STK and calls `depositToken(1e18)`. The call mints a position NFT and returns its `tokenId`.
+4. After 30 days, the owner of the NFT calls `claimRewards(tokenId)` and receives 0.01 ETH. The staking period resets — the position can be claimed again after another 30 days without re-depositing.
+5. The owner of the NFT can call `withdrawTokens(tokenId)` at any time to recover the staked tokens and burn the NFT, including while the contract is paused.
+
+The NFT is a bearer instrument: whoever owns it controls the position. Transferring the NFT transfers the right to claim and withdraw, together with the staking time already accrued.
 
 ## Architecture
 
@@ -44,28 +46,33 @@ sequenceDiagram
     actor User
     participant StakingToken
     participant StakingApp
+    participant StakingNFT
 
     User->>StakingToken: approve(stakingApp, fixStakingAmount)
     User->>StakingApp: depositToken(fixStakingAmount)
+    StakingApp->>StakingNFT: mint(user, amount, timestamp)
     StakingApp->>StakingToken: safeTransferFrom(user, app, amount)
-    Note over StakingApp: records userBalance and timestamp
+    Note over StakingApp: records lastActivity[tokenId]
 
     Note over User,StakingApp: stakingPeriod elapses
 
-    User->>StakingApp: claimRewards()
+    User->>StakingApp: claimRewards(tokenId)
+    Note over StakingApp: requires ownerOf(tokenId) == user
     StakingApp-->>User: transfer rewardPerPeriod ETH
-    Note over StakingApp: resets timestamp
+    Note over StakingApp: resets lastActivity[tokenId]
 
-    User->>StakingApp: withdrawTokens()
+    User->>StakingApp: withdrawTokens(tokenId)
+    StakingApp->>StakingNFT: burn(tokenId)
     StakingApp->>StakingToken: safeTransfer(user, amount)
-    Note over StakingApp: clears userBalance
+    Note over StakingApp: clears lastActivity[tokenId]
 ```
 
 ## Key Features
 
 | Feature | Detail |
 |---|---|
-| Fixed-amount staking | Each user holds at most one active position of exactly `fixStakingAmount` tokens |
+| Fixed-amount staking | Each position holds exactly `fixStakingAmount` tokens; an address can open several positions |
+| Transferable positions | Each position is an ERC-721; the NFT owner (not an approved operator) can claim and withdraw |
 | Periodic ETH rewards | Fixed ETH payout per completed staking period; period resets on each claim |
 | Emergency pause | Owner can pause `depositToken` and `claimRewards`; `withdrawTokens` is always open |
 | Safe token transfers | `SafeERC20` wraps all ERC20 calls to handle non-standard return values |
@@ -79,9 +86,9 @@ sequenceDiagram
 
 | Function | Access | Description |
 |---|---|---|
-| `depositToken(uint256)` | public · whenNotPaused | Deposits exactly `fixStakingAmount` tokens (once per user) |
-| `withdrawTokens()` | public | Returns staked tokens; always available, even when paused |
-| `claimRewards()` | public · whenNotPaused | Transfers `rewardPerPeriod` ETH after staking period elapses |
+| `depositToken(uint256)` | public · whenNotPaused | Deposits exactly `fixStakingAmount` tokens, mints a position NFT and returns its `tokenId` |
+| `withdrawTokens(uint256 tokenId)` | NFT owner | Returns staked tokens and burns the NFT; always available, even when paused |
+| `claimRewards(uint256 tokenId)` | NFT owner · whenNotPaused | Transfers `rewardPerPeriod` ETH after staking period elapses |
 | `pause() / unpause()` | onlyOwner | Toggles emergency pause |
 | `changeStakingPeriod(uint256)` | onlyOwner | Updates the required staking duration |
 | `receive()` | onlyOwner | Funds the contract with ETH for reward payouts |

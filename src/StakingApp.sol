@@ -13,11 +13,10 @@ import "./StakingNFT.sol";
 /// @param provided The amount the caller attempted to deposit.
 error IncorrectAmount(uint256 expected, uint256 provided);
 
-/// @notice Thrown when a user tries to deposit while already holding an active stake.
-error AlreadyDeposited();
-
-/// @notice Thrown when a user tries to withdraw or claim without an active stake.
-error NotStaking();
+/// @notice Thrown when a caller tries to claim or withdraw a position NFT they do not own.
+/// @param tokenId The position the caller attempted to act on.
+/// @param caller The address that attempted the call.
+error NotPositionOwner(uint256 tokenId, address caller);
 
 /// @notice Thrown when a user tries to claim before the staking period has elapsed.
 /// @param remaining Seconds left until the staking period completes.
@@ -38,8 +37,11 @@ error InvalidStakingPeriod(uint256 provided);
 
 /// @title StakingApp
 /// @notice Fixed-amount ERC20 staking contract that rewards stakers with ETH after each completed period.
-///         Each active position is represented by an ERC-721 NFT minted on deposit and burned on withdrawal.
+///         Each position is an ERC-721 NFT minted on deposit and burned on withdrawal. The NFT is a bearer
+///         instrument: whoever owns it can claim its rewards and withdraw its tokens, so a position can be
+///         sold or transferred together with its accrued staking time.
 /// @dev Inherits Ownable2Step, ReentrancyGuard, and Pausable from OpenZeppelin v5.
+///      Only the NFT owner is authorized; an address approved via `approve` or `setApprovalForAll` is not.
 contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
 
@@ -64,12 +66,10 @@ contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
     /// @notice ETH amount paid to the staker on each successful reward claim.
     uint256 public immutable rewardPerPeriod;
 
-    /// @notice Token ID of the active position NFT held by each user. 0 means no active position.
-    mapping(address => uint256) public userTokenId;
-
-    /// @notice Timestamp of the last deposit or successful claim for each user.
-    ///         Used to calculate whether the staking period has elapsed.
-    mapping(address => uint256) public lastActivity;
+    /// @notice Timestamp of the last deposit or successful claim for each position.
+    ///         Used to calculate whether the staking period has elapsed. 0 means no open position.
+    /// @dev Keyed by token ID rather than by address so the timer travels with the NFT when it is transferred.
+    mapping(uint256 => uint256) public lastActivity;
 
     /// @notice Emitted when the owner updates the staking period.
     /// @param stakingPeriod_ The new staking period in seconds.
@@ -97,26 +97,32 @@ contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
     event EtherSent(uint256 amount_);
 
     /// @notice Deploys the staking contract with the given configuration.
+    /// @dev Deploys the StakingNFT itself so it is wired to `address(this)` by construction,
+    ///      with no need to predict this contract's address from the deployer's nonce.
     /// @param stakingToken_ Address of the ERC20 token accepted for staking.
-    /// @param stakingNFT_ Address of the StakingNFT contract that will mint position receipts.
-    /// @param owner_ Address that will own and manage this contract.
+    /// @param descriptor_ Address of the ITokenURIDescriptor used to render position metadata.
+    /// @param owner_ Address that will own and manage this contract and the StakingNFT it deploys.
     /// @param stakingPeriod_ Duration in seconds required between deposit and reward claim.
     /// @param fixStakingAmount_ Exact token amount each user must deposit.
     /// @param rewardPerPeriod_ ETH amount paid per completed staking period.
+    /// @param nftName_ ERC-721 collection name of the position NFT.
+    /// @param nftSymbol_ ERC-721 collection symbol of the position NFT.
     constructor(
         address stakingToken_,
-        address stakingNFT_,
+        address descriptor_,
         address owner_,
         uint256 stakingPeriod_,
         uint256 fixStakingAmount_,
-        uint256 rewardPerPeriod_
+        uint256 rewardPerPeriod_,
+        string memory nftName_,
+        string memory nftSymbol_
     ) Ownable(owner_) {
-        if (stakingToken_ == address(0) || stakingNFT_ == address(0)) revert ZeroAddress();
+        if (stakingToken_ == address(0)) revert ZeroAddress();
         if (fixStakingAmount_ == 0 || rewardPerPeriod_ == 0) revert ZeroAmount();
         _validateStakingPeriod(stakingPeriod_);
 
         stakingToken = IERC20(stakingToken_);
-        stakingNFT = StakingNFT(stakingNFT_);
+        stakingNFT = new StakingNFT(nftName_, nftSymbol_, address(this), owner_, descriptor_);
         stakingPeriod = stakingPeriod_;
         fixStakingAmount = fixStakingAmount_;
         rewardPerPeriod = rewardPerPeriod_;
@@ -134,46 +140,46 @@ contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
 
     /// @notice Deposits exactly `fixStakingAmount` tokens and mints an ERC-721 position NFT.
     /// @dev Caller must approve this contract for at least `fixStakingAmount` before calling.
-    ///      Each address may hold only one active position at a time.
+    ///      An address may open any number of positions; each deposit mints a new NFT.
     /// @param tokenAmountToDeposit_ Must equal `fixStakingAmount`; any other value reverts.
-    function depositToken(uint256 tokenAmountToDeposit_) external nonReentrant whenNotPaused {
+    /// @return tokenId The ID of the newly minted position NFT.
+    function depositToken(uint256 tokenAmountToDeposit_) external nonReentrant whenNotPaused returns (uint256 tokenId) {
         if (tokenAmountToDeposit_ != fixStakingAmount) revert IncorrectAmount(fixStakingAmount, tokenAmountToDeposit_);
-        if (userTokenId[msg.sender] != 0) revert AlreadyDeposited();
 
-        lastActivity[msg.sender] = block.timestamp;
-        uint256 tokenId = stakingNFT.mint(msg.sender, tokenAmountToDeposit_, block.timestamp);
-        userTokenId[msg.sender] = tokenId;
+        tokenId = stakingNFT.mint(msg.sender, tokenAmountToDeposit_, block.timestamp);
+        lastActivity[tokenId] = block.timestamp;
         stakingToken.safeTransferFrom(msg.sender, address(this), tokenAmountToDeposit_);
 
         emit DepositTokens(msg.sender, tokenAmountToDeposit_, tokenId);
     }
 
-    /// @notice Withdraws the caller's staked tokens and burns the position NFT.
+    /// @notice Withdraws the staked tokens of a position and burns its NFT.
     /// @dev Always available, even when the contract is paused, so users can never be locked in.
+    ///      Reverts with {NotPositionOwner} unless the caller owns the NFT.
     ///      Follows the CEI pattern: state is cleared before external calls.
-    function withdrawTokens() external nonReentrant {
-        uint256 tokenId = userTokenId[msg.sender];
-        if (tokenId == 0) revert NotStaking();
+    /// @param tokenId_ The position to close.
+    function withdrawTokens(uint256 tokenId_) external nonReentrant {
+        _requirePositionOwner(tokenId_);
 
-        delete userTokenId[msg.sender];
-        delete lastActivity[msg.sender];
+        delete lastActivity[tokenId_];
 
-        stakingNFT.burn(tokenId);
+        stakingNFT.burn(tokenId_);
         stakingToken.safeTransfer(msg.sender, fixStakingAmount);
 
-        emit WithdrawTokens(msg.sender, fixStakingAmount, tokenId);
+        emit WithdrawTokens(msg.sender, fixStakingAmount, tokenId_);
     }
 
-    /// @notice Claims the ETH reward for the caller's completed staking period.
-    /// @dev Resets the staking timestamp on success so the next period begins immediately
-    ///      without requiring a new deposit.
-    function claimRewards() external nonReentrant whenNotPaused {
-        if (userTokenId[msg.sender] == 0) revert NotStaking();
+    /// @notice Claims the ETH reward for a position whose staking period has elapsed.
+    /// @dev Resets the position's timestamp on success so the next period begins immediately
+    ///      without requiring a new deposit. Reverts with {NotPositionOwner} unless the caller owns the NFT.
+    /// @param tokenId_ The position to claim for.
+    function claimRewards(uint256 tokenId_) external nonReentrant whenNotPaused {
+        _requirePositionOwner(tokenId_);
 
-        uint256 elapsed = block.timestamp - lastActivity[msg.sender];
+        uint256 elapsed = block.timestamp - lastActivity[tokenId_];
         if (elapsed < stakingPeriod) revert StakingPeriodNotElapsed(stakingPeriod - elapsed);
 
-        lastActivity[msg.sender] = block.timestamp;
+        lastActivity[tokenId_] = block.timestamp;
 
         (bool success,) = msg.sender.call{value: rewardPerPeriod}("");
         if (!success) revert EthTransferFailed();
@@ -195,6 +201,12 @@ contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
         _validateStakingPeriod(stakingPeriod_);
         stakingPeriod = stakingPeriod_;
         emit ChangeStakingPeriod(stakingPeriod_);
+    }
+
+    /// @dev Reverts with {NotPositionOwner} unless `msg.sender` owns `tokenId_`.
+    ///      `ownerOf` itself reverts for a nonexistent or burned token.
+    function _requirePositionOwner(uint256 tokenId_) private view {
+        if (stakingNFT.ownerOf(tokenId_) != msg.sender) revert NotPositionOwner(tokenId_, msg.sender);
     }
 
     /// @dev Reverts if `stakingPeriod_` is outside the allowed bounds.

@@ -8,8 +8,8 @@ import "../src/StakingNFT.sol";
 import "../src/StakingApp.sol";
 
 /// @dev Local-only deploy for manual testing. Uses Anvil's deterministic accounts.
-///      Produces the same contract addresses as deployedContracts.ts every time
-///      because Anvil resets nonces to 0 on each fresh start.
+///      Produces the same contract addresses on every fresh Anvil start, because
+///      addresses derive from the deployer address and its nonce, and Anvil resets nonces to 0.
 contract LocalDeploy is Script {
     address constant OWNER = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266; // Anvil account #0
 
@@ -22,15 +22,19 @@ contract LocalDeploy is Script {
     function run() external {
         vm.startBroadcast();
 
-        // Nonce prediction so StakingNFT can reference StakingApp at construction time.
-        uint64 nonce = vm.getNonce(msg.sender);
-        address predictedApp = vm.computeCreateAddress(msg.sender, nonce + 3);
-
         StakingToken token = new StakingToken("Staking Token", "STK", OWNER);
         StakingNFTDescriptor descriptor = new StakingNFTDescriptor();
-        StakingNFT nft = new StakingNFT("STK Position", "STKP", predictedApp, OWNER, address(descriptor));
-        StakingApp app =
-            new StakingApp(address(token), address(nft), OWNER, STAKING_PERIOD, FIX_STAKING_AMOUNT, REWARD_PER_PERIOD);
+        StakingApp app = new StakingApp(
+            address(token),
+            address(descriptor),
+            OWNER,
+            STAKING_PERIOD,
+            FIX_STAKING_AMOUNT,
+            REWARD_PER_PERIOD,
+            "STK Position",
+            "STKP"
+        );
+        StakingNFT nft = app.stakingNFT();
 
         // Pre-fund all 10 Anvil accounts with 100 STK each.
         // Account #0 is the broadcaster/owner: mint gives tokens to it, then distribute to #1-#9.

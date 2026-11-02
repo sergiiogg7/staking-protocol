@@ -16,16 +16,19 @@ contract Deploy is Script {
 
         vm.startBroadcast();
 
-        // Deploy order: token(nonce), descriptor(nonce+1), nft(nonce+2), app(nonce+3).
-        // StakingNFT needs StakingApp's address at construction time; predict it from the nonce.
-        uint64 nonce = vm.getNonce(msg.sender);
-        address predictedApp = vm.computeCreateAddress(msg.sender, nonce + 3);
-
         StakingToken token = new StakingToken("Staking Token", "STK", owner);
         StakingNFTDescriptor descriptor = new StakingNFTDescriptor();
-        StakingNFT nft = new StakingNFT("STK Position", "STKP", predictedApp, owner, address(descriptor));
-        StakingApp app =
-            new StakingApp(address(token), address(nft), owner, stakingPeriod, fixStakingAmount, rewardPerPeriod);
+        StakingApp app = new StakingApp(
+            address(token),
+            address(descriptor),
+            owner,
+            stakingPeriod,
+            fixStakingAmount,
+            rewardPerPeriod,
+            "STK Position",
+            "STKP"
+        );
+        StakingNFT nft = app.stakingNFT();
 
         vm.stopBroadcast();
 

@@ -25,15 +25,19 @@ contract StakingNFTTest is Test {
     uint256 rewardPerPeriod_ = 0.01 ether;
 
     function setUp() external {
-        uint64 nonce = vm.getNonce(address(this));
-        address predictedStakingApp = vm.computeCreateAddress(address(this), nonce + 3);
-
         stakingToken = new StakingToken("Staking Token", "STK", owner_);
         descriptor = new StakingNFTDescriptor();
-        stakingNFT = new StakingNFT("STK Position", "STKP", predictedStakingApp, owner_, address(descriptor));
         stakingApp = new StakingApp(
-            address(stakingToken), address(stakingNFT), owner_, stakingPeriod_, fixedStakingAmount_, rewardPerPeriod_
+            address(stakingToken),
+            address(descriptor),
+            owner_,
+            stakingPeriod_,
+            fixedStakingAmount_,
+            rewardPerPeriod_,
+            "STK Position",
+            "STKP"
         );
+        stakingNFT = stakingApp.stakingNFT();
     }
 
     // -------------------------------------------------------------------------
@@ -48,10 +52,8 @@ contract StakingNFTTest is Test {
 
         vm.startPrank(user_);
         IERC20(address(stakingToken)).approve(address(stakingApp), fixedStakingAmount_);
-        stakingApp.depositToken(fixedStakingAmount_);
+        tokenId_ = stakingApp.depositToken(fixedStakingAmount_);
         vm.stopPrank();
-
-        return stakingApp.userTokenId(user_);
     }
 
     // -------------------------------------------------------------------------
@@ -144,7 +146,7 @@ contract StakingNFTTest is Test {
 
         // Act
         vm.prank(randomUser);
-        stakingApp.withdrawTokens();
+        stakingApp.withdrawTokens(tokenId);
 
         // Assert — OZ v5 reverts with ERC721NonexistentToken on ownerOf for burned tokens
         vm.expectRevert(abi.encodeWithSignature("ERC721NonexistentToken(uint256)", tokenId));
@@ -157,7 +159,7 @@ contract StakingNFTTest is Test {
 
         // Act
         vm.prank(randomUser);
-        stakingApp.withdrawTokens();
+        stakingApp.withdrawTokens(tokenId);
 
         // Assert
         assertEq(stakingNFT.depositAmount(tokenId), 0);
@@ -166,12 +168,12 @@ contract StakingNFTTest is Test {
 
     function test_burn_decrementsTotalPositions() external {
         // Arrange
-        _createPosition(randomUser);
+        uint256 tokenId = _createPosition(randomUser);
         assertEq(stakingNFT.totalPositions(), 1);
 
         // Act
         vm.prank(randomUser);
-        stakingApp.withdrawTokens();
+        stakingApp.withdrawTokens(tokenId);
 
         // Assert
         assertEq(stakingNFT.totalPositions(), 0);

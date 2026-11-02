@@ -22,15 +22,19 @@ contract StakingAppFuzz is Test {
     uint256 rewardPerPeriod_ = 0.01 ether;
 
     function setUp() external {
-        uint64 nonce = vm.getNonce(address(this));
-        address predictedStakingApp = vm.computeCreateAddress(address(this), nonce + 3);
-
         stakingToken = new StakingToken("Staking Token", "STK", owner_);
         descriptor = new StakingNFTDescriptor();
-        stakingNFT = new StakingNFT("STK Position", "STKP", predictedStakingApp, owner_, address(descriptor));
         stakingApp = new StakingApp(
-            address(stakingToken), address(stakingNFT), owner_, stakingPeriod_, fixedStakingAmount_, rewardPerPeriod_
+            address(stakingToken),
+            address(descriptor),
+            owner_,
+            stakingPeriod_,
+            fixedStakingAmount_,
+            rewardPerPeriod_,
+            "STK Position",
+            "STKP"
         );
+        stakingNFT = stakingApp.stakingNFT();
     }
 
     function _fundAndApprove(address user_, uint256 amount_) internal {
@@ -62,13 +66,13 @@ contract StakingAppFuzz is Test {
         timeElapsed_ = bound(timeElapsed_, 0, stakingPeriod_ - 1);
         _fundAndApprove(randomUser, fixedStakingAmount_);
         vm.prank(randomUser);
-        stakingApp.depositToken(fixedStakingAmount_);
+        uint256 tokenId = stakingApp.depositToken(fixedStakingAmount_);
 
         // Act / Assert
         vm.warp(block.timestamp + timeElapsed_);
         vm.prank(randomUser);
         vm.expectRevert(abi.encodeWithSelector(StakingPeriodNotElapsed.selector, stakingPeriod_ - timeElapsed_));
-        stakingApp.claimRewards();
+        stakingApp.claimRewards(tokenId);
     }
 
     // The owner can set any in-bounds staking period and it must be stored correctly.

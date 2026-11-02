@@ -9,6 +9,7 @@ import "../src/StakingApp.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // Handler wraps StakingApp calls so Foundry can call them with valid state.
+// It tracks every open position by token ID and always acts as the current NFT owner.
 contract StakingAppHandler is Test {
     StakingToken public stakingToken;
     StakingNFT public stakingNFT;
@@ -16,6 +17,7 @@ contract StakingAppHandler is Test {
 
     address public owner;
     address[] public stakers;
+    uint256[] public openTokenIds;
 
     uint256 public ghostEthFunded;
     uint256 public ghostEthClaimed;
@@ -26,18 +28,13 @@ contract StakingAppHandler is Test {
         stakingApp = stakingApp_;
         owner = owner_;
 
-        // Pre-fund a set of staker addresses so the handler can deposit on their behalf.
         for (uint256 i = 0; i < 5; i++) {
             stakers.push(vm.addr(100 + i));
         }
     }
 
     function deposit(uint256 stakerIndex_) external {
-        stakerIndex_ = bound(stakerIndex_, 0, stakers.length - 1);
-        address staker = stakers[stakerIndex_];
-
-        if (stakingApp.userTokenId(staker) != 0) return;
-
+        address staker = stakers[bound(stakerIndex_, 0, stakers.length - 1)];
         uint256 amount = stakingApp.fixStakingAmount();
 
         vm.startPrank(owner);
@@ -47,29 +44,41 @@ contract StakingAppHandler is Test {
 
         vm.startPrank(staker);
         IERC20(address(stakingToken)).approve(address(stakingApp), amount);
-        stakingApp.depositToken(amount);
+        uint256 tokenId = stakingApp.depositToken(amount);
         vm.stopPrank();
+
+        openTokenIds.push(tokenId);
     }
 
-    function withdraw(uint256 stakerIndex_) external {
-        stakerIndex_ = bound(stakerIndex_, 0, stakers.length - 1);
-        address staker = stakers[stakerIndex_];
+    function withdraw(uint256 positionIndex_) external {
+        if (openTokenIds.length == 0) return;
+        uint256 index = bound(positionIndex_, 0, openTokenIds.length - 1);
+        uint256 tokenId = openTokenIds[index];
 
-        if (stakingApp.userTokenId(staker) == 0) return;
+        vm.prank(stakingNFT.ownerOf(tokenId));
+        stakingApp.withdrawTokens(tokenId);
 
-        vm.prank(staker);
-        stakingApp.withdrawTokens();
+        openTokenIds[index] = openTokenIds[openTokenIds.length - 1];
+        openTokenIds.pop();
     }
 
-    function claim(uint256 stakerIndex_, uint256 elapsed_) external {
-        stakerIndex_ = bound(stakerIndex_, 0, stakers.length - 1);
-        address staker = stakers[stakerIndex_];
+    function transferPosition(uint256 positionIndex_, uint256 toIndex_) external {
+        if (openTokenIds.length == 0) return;
+        uint256 tokenId = openTokenIds[bound(positionIndex_, 0, openTokenIds.length - 1)];
+        address holder = stakingNFT.ownerOf(tokenId);
+        address to = stakers[bound(toIndex_, 0, stakers.length - 1)];
 
-        if (stakingApp.userTokenId(staker) == 0) return;
+        vm.prank(holder);
+        stakingNFT.transferFrom(holder, to, tokenId);
+    }
+
+    function claim(uint256 positionIndex_, uint256 elapsed_) external {
+        if (openTokenIds.length == 0) return;
+        uint256 tokenId = openTokenIds[bound(positionIndex_, 0, openTokenIds.length - 1)];
 
         elapsed_ = bound(elapsed_, 0, 60 days);
         vm.warp(block.timestamp + elapsed_);
-        if (block.timestamp - stakingApp.lastActivity(staker) < stakingApp.stakingPeriod()) return;
+        if (block.timestamp - stakingApp.lastActivity(tokenId) < stakingApp.stakingPeriod()) return;
 
         uint256 reward = stakingApp.rewardPerPeriod();
         if (address(stakingApp).balance < reward) {
@@ -80,13 +89,17 @@ contract StakingAppHandler is Test {
             ghostEthFunded += reward;
         }
 
-        vm.prank(staker);
-        stakingApp.claimRewards();
+        vm.prank(stakingNFT.ownerOf(tokenId));
+        stakingApp.claimRewards(tokenId);
         ghostEthClaimed += reward;
     }
 
     function stakersLength() external view returns (uint256) {
         return stakers.length;
+    }
+
+    function openTokenIdsLength() external view returns (uint256) {
+        return openTokenIds.length;
     }
 }
 
@@ -103,15 +116,19 @@ contract StakingAppInvariant is Test {
     uint256 rewardPerPeriod_ = 0.01 ether;
 
     function setUp() external {
-        uint64 nonce = vm.getNonce(address(this));
-        address predictedStakingApp = vm.computeCreateAddress(address(this), nonce + 3);
-
         stakingToken = new StakingToken("Staking Token", "STK", owner);
         descriptor = new StakingNFTDescriptor();
-        stakingNFT = new StakingNFT("STK Position", "STKP", predictedStakingApp, owner, address(descriptor));
         stakingApp = new StakingApp(
-            address(stakingToken), address(stakingNFT), owner, stakingPeriod_, fixedStakingAmount_, rewardPerPeriod_
+            address(stakingToken),
+            address(descriptor),
+            owner,
+            stakingPeriod_,
+            fixedStakingAmount_,
+            rewardPerPeriod_,
+            "STK Position",
+            "STKP"
         );
+        stakingNFT = stakingApp.stakingNFT();
         handler = new StakingAppHandler(stakingToken, stakingNFT, stakingApp, owner);
 
         targetContract(address(handler));
@@ -131,20 +148,23 @@ contract StakingAppInvariant is Test {
         assertEq(address(stakingApp).balance, handler.ghostEthFunded() - handler.ghostEthClaimed());
     }
 
-    // userTokenId and NFT ownership never diverge: a staker owns their tracked NFT, or no NFT at all.
-    function invariant_userTokenIdMatchesNftOwnership() external view {
-        uint256 active;
-        for (uint256 i = 0; i < handler.stakersLength(); i++) {
-            address staker = handler.stakers(i);
-            uint256 tokenId = stakingApp.userTokenId(staker);
-            if (tokenId == 0) {
-                assertEq(stakingNFT.balanceOf(staker), 0);
-            } else {
-                assertEq(stakingNFT.ownerOf(tokenId), staker);
-                assertEq(stakingNFT.balanceOf(staker), 1);
-                active++;
-            }
+    // Every position the handler considers open is a live NFT with a running timer,
+    // and the handler's count matches the NFT contract's own count.
+    function invariant_openPositionsAreLiveWithTimer() external view {
+        assertEq(handler.openTokenIdsLength(), stakingNFT.totalPositions());
+        for (uint256 i = 0; i < handler.openTokenIdsLength(); i++) {
+            uint256 tokenId = handler.openTokenIds(i);
+            assertGt(stakingApp.lastActivity(tokenId), 0);
+            assertTrue(stakingNFT.ownerOf(tokenId) != address(0));
         }
-        assertEq(active, stakingNFT.totalPositions());
+    }
+
+    // Positions only ever move between known stakers, so their NFT balances add up to the total.
+    function invariant_stakerNftBalancesSumToTotalPositions() external view {
+        uint256 sum;
+        for (uint256 i = 0; i < handler.stakersLength(); i++) {
+            sum += stakingNFT.balanceOf(handler.stakers(i));
+        }
+        assertEq(sum, stakingNFT.totalPositions());
     }
 }
