@@ -20,7 +20,7 @@ contract StakingNFTDescriptor is ITokenURIDescriptor {
         override
         returns (string memory)
     {
-        string memory svg = _buildSVG(tokenId_, depositAmount_, depositTimestamp_);
+        string memory svg = _buildSVG(tokenId_, depositAmount_);
 
         // Wrap the SVG in a data URI so it can be embedded in the JSON image field.
         // Base64.encode converts binary bytes to ASCII-safe text; the data: scheme tells
@@ -33,11 +33,11 @@ contract StakingNFTDescriptor is ITokenURIDescriptor {
                 tokenId_.toString(),
                 '","description":"STK fixed-amount staking position","image":"',
                 imageUri,
-                '","attributes":[{"trait_type":"Amount","value":"',
+                '","attributes":[{"trait_type":"Amount (wei)","value":"',
                 depositAmount_.toString(),
-                '"},{"trait_type":"Staked At","value":"',
+                '"},{"display_type":"date","trait_type":"Staked At","value":',
                 depositTimestamp_.toString(),
-                '"}]}'
+                "}]}"
             )
         );
 
@@ -45,12 +45,10 @@ contract StakingNFTDescriptor is ITokenURIDescriptor {
         return string(abi.encodePacked("data:application/json;base64,", Base64.encode(bytes(json))));
     }
 
-    /// @dev Builds the SVG markup for a staking position card.
-    function _buildSVG(uint256 tokenId_, uint256 depositAmount_, uint256 depositTimestamp_)
-        internal
-        pure
-        returns (string memory)
-    {
+    /// @dev Builds the SVG markup for a staking position card. The amount is shown in raw wei and
+    ///      the opening date is left to the `display_type: "date"` attribute of the JSON, which
+    ///      marketplaces render as a calendar date; clients format units with the token decimals.
+    function _buildSVG(uint256 tokenId_, uint256 depositAmount_) internal pure returns (string memory) {
         return string(
             abi.encodePacked(
                 '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300">',
@@ -59,11 +57,8 @@ contract StakingNFTDescriptor is ITokenURIDescriptor {
                 '<text x="150" y="130" font-family="monospace" font-size="40" font-weight="bold" fill="#f8fafc" text-anchor="middle">#',
                 tokenId_.toString(),
                 "</text>",
-                '<text x="150" y="185" font-family="monospace" font-size="13" fill="#64748b" text-anchor="middle">Amount: ',
+                '<text x="150" y="185" font-family="monospace" font-size="13" fill="#64748b" text-anchor="middle">Amount (wei): ',
                 depositAmount_.toString(),
-                "</text>",
-                '<text x="150" y="215" font-family="monospace" font-size="11" fill="#475569" text-anchor="middle">Since: ',
-                depositTimestamp_.toString(),
                 "</text>",
                 "</svg>"
             )
