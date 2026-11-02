@@ -165,15 +165,17 @@ StakingApp   : (pendiente)
 ### Ruta `/` — My Position
 
 - 🔲 Conectar wallet (conectores de wagmi)
-- 🔲 Mostrar estado: sin posición / posición activa
-- 🔲 Si tiene posición: mostrar NFT (imagen SVG generada on-chain), tokens stakeados, countdown al próximo claim
-- 🔲 Botones: `Deposit`, `Claim` (disabled hasta que el período haya pasado), `Withdraw`
+- 🔲 Listar las posiciones de la wallet: una dirección puede tener varias y el NFT es transferible. Se obtienen leyendo los eventos `Transfer` del `StakingNFT` con `getLogs` y comprobando `ownerOf` (no hay `ERC721Enumerable`)
+- 🔲 Por posición: NFT (imagen SVG on-chain desde `tokenURI`), tokens stakeados y `claimableRewards(tokenId)` leído del contrato, sin recalcularlo en el frontend
+- 🔲 Formatear importes con `formatUnits` (el descriptor y los contratos devuelven wei crudos)
+- 🔲 Botones: `Deposit` (approve y luego `depositToken`, dos transacciones), `Claim` (disabled si `claimableRewards` es 0), `Withdraw`
+- 🔲 Aviso previo al claim si el balance ETH del contrato es menor que lo reclamable (evita pagar gas por un `EthTransferFailed`)
 - 🔲 Estados de transacción: pending → confirming → confirmed con toast
-- 🔲 Mapear custom errors del contrato a mensajes legibles
+- 🔲 Mapear custom errors del contrato a mensajes legibles (`NotPositionOwner`, `StakingPeriodNotElapsed`, `IncorrectAmount`, `EthTransferFailed`, `EnforcedPause`)
 
 ### Ruta `/activity` — Protocol Activity
 
-- 🔲 Tabla de eventos: `DepositTokens`, `WithdrawTokens`, `RewardsClaimed`
+- 🔲 Tabla de eventos: `DepositTokens`, `WithdrawTokens`, `RewardsClaimed`, `EtherSent`, `EtherWithdrawn`
 - 🔲 Filtro por wallet (por defecto filtra la wallet conectada, opción "ver todo")
 - 🔲 Chainlink ETH/USD feed para mostrar valor en USD de cada reward claim
 
@@ -181,9 +183,10 @@ StakingApp   : (pendiente)
 
 - 🔲 Visible solo si `address === owner`
 - 🔲 Pause / Unpause
-- 🔲 Cambiar staking period
 - 🔲 Enviar ETH al contrato (fund rewards)
 - 🔲 Balance ETH del contrato en tiempo real
+- 🔲 Retirar ETH (`withdrawEther`): botón desactivado con la razón "quedan N posiciones abiertas" (`totalPositions` del NFT) mientras haya alguna
+- 🔲 Mostrar los parámetros inmutables (`stakingPeriod`, `fixStakingAmount`, `rewardPerPeriod`): ya no hay cambio de periodo
 
 ---
 
@@ -227,3 +230,5 @@ StakingApp   : (pendiente)
 | 2026-11-02 | 1 | `stakingPeriod` pasa a `immutable`: eliminados `changeStakingPeriod` y el evento `ChangeStakingPeriod`; el periodo se valida solo en el constructor. Evita reescribir lo ya acumulado por posiciones abiertas. Tests de constructor (límites y fuzz) sustituyen a los de `changeStakingPeriod`. 85 tests, 100 % cobertura |
 | 2026-11-02 | 1 | `withdrawEther()` (onlyOwner): el owner recupera el ETH solo con 0 posiciones abiertas (`PositionsStillOpen`), `EtherWithdrawn`. Handler de invariantes con financiación y retirada de ETH, e invariante nueva "nunca se retira ETH con posiciones abiertas". 94 tests, 100 % cobertura |
 | 2026-11-02 | 1 | `StakingToken` y `StakingNFT` pasan de `Ownable` a `Ownable2Step` (los tres contratos con transferencia de propiedad en dos pasos). 11 tests nuevos. 105 tests, 100 % cobertura |
+| 2026-11-02 | 1 | Descriptor: el importe se rotula `Amount (wei)` (sin cambio de interfaz ni de constructor), la fecha pasa a atributo JSON `display_type: "date"` y se quita `Since: <unix>` del SVG. Se descartó formatear decimales en Solidity por complejidad: lo hace el frontend. Test de contenido del `tokenURI`. 106 tests, 100 % cobertura |
+| 2026-11-02 | 3 | `README.md` actualizado (cuatro contratos, NFT al portador, inmutables, tests y gas reales, licencia MIT). Fase 3 ajustada a los contratos finales: lista de posiciones por `getLogs`, `claimableRewards`, aviso de balance insuficiente, `formatUnits`, `withdrawEther` en `/admin`, sin cambio de periodo |

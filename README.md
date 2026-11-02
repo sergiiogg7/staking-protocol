@@ -1,25 +1,29 @@
 # Staking Protocol
 
-A fixed-amount ERC20 staking protocol on Ethereum. Users lock a fixed token amount for a configurable period and claim ETH rewards. The protocol is owner-managed and includes an emergency pause mechanism.
+A fixed-amount ERC20 staking protocol on Ethereum. Users lock a fixed token amount and claim ETH rewards for every completed staking period. Each position is an ERC-721 NFT that doubles as a bearer title: whoever owns it controls the position. The protocol is owner-managed and includes an emergency pause mechanism.
 
 ![CI](https://github.com/sergiiogg7/staking-protocol/actions/workflows/test.yml/badge.svg)
-![Solidity ^0.8.24](https://img.shields.io/badge/Solidity-%5E0.8.24-blue)
+![Solidity 0.8.24](https://img.shields.io/badge/Solidity-0.8.24-blue)
 ![Foundry](https://img.shields.io/badge/built%20with-Foundry-FF6B6B)
-![Tests](https://img.shields.io/badge/tests-62%20passing-green)
-![License: UNLICENSED](https://img.shields.io/badge/license-UNLICENSED-lightgrey)
+![Tests](https://img.shields.io/badge/tests-106%20passing-green)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
 ---
 
 ## Overview
 
-The protocol consists of two contracts:
+The protocol consists of four contracts:
 
 - **`StakingToken`** — a mintable ERC20 with a hard cap of 1,000,000 tokens and a batch distribution function for airdrops.
-- **`StakingApp`** — accepts deposits of exactly `fixStakingAmount` tokens, tracks staking timestamps, and pays `rewardPerPeriod` ETH after each completed `stakingPeriod`. The owner funds the contract with ETH via `receive()` and can pause deposits and reward claims in an emergency without blocking withdrawals.
+- **`StakingApp`** — accepts deposits of exactly `fixStakingAmount` tokens, tracks a timer per position, and pays `rewardPerPeriod` ETH for each completed `stakingPeriod`. It deploys its own `StakingNFT` in the constructor. The owner funds the contract with ETH via `receive()` and can pause deposits and reward claims in an emergency without blocking withdrawals.
+- **`StakingNFT`** — the ERC-721 that represents each position. Only `StakingApp` can mint and burn it.
+- **`StakingNFTDescriptor`** — renders the NFT metadata on-chain (SVG and JSON as base64 data URIs). It can be replaced through `StakingNFT.setDescriptor` without touching positions.
+
+The staking period, the fixed amount and the reward are `immutable`: they are set at deployment and cannot change under open positions.
 
 ## Example
 
-1. Owner deploys both contracts, setting a 30-day staking period, a fixed amount of 1 STK, and a 0.01 ETH reward per period.
+1. Owner deploys the token, the descriptor and `StakingApp` (which creates the NFT), setting a 30-day staking period, a fixed amount of 1 STK, and a 0.01 ETH reward per period.
 2. Owner mints tokens and funds `StakingApp` with ETH.
 3. User approves `StakingApp` to spend 1 STK and calls `depositToken(1e18)`. The call mints a position NFT and returns its `tokenId`.
 4. After 30 days, the owner of the NFT calls `claimRewards(tokenId)` and receives 0.01 ETH. Rewards accrue per completed period: claiming after 75 days pays 2 × 0.01 ETH and the remaining 15 days keep counting toward the next period. No re-deposit is needed.
@@ -33,9 +37,13 @@ The NFT is a bearer instrument: whoever owns it controls the position. Transferr
 graph TD
     Owner -->|mint / distributeTokens| STK[StakingToken\nERC20 · Ownable2Step]
     Owner -->|fund ETH · withdrawEther when no positions · pause| APP[StakingApp\nOwnable2Step · ReentrancyGuard · Pausable]
+    Owner -->|setDescriptor| NFT[StakingNFT\nERC721 · Ownable2Step]
     User -->|approve| STK
     User -->|depositToken\nclaimRewards\nwithdrawTokens| APP
     APP -->|safeTransferFrom / safeTransfer| STK
+    APP -->|deploys · mint / burn| NFT
+    APP -->|ownerOf check| NFT
+    NFT -->|constructTokenURI| DESC[StakingNFTDescriptor\non-chain SVG + JSON]
     APP -->|ETH transfer| User
 ```
 
@@ -106,7 +114,7 @@ sequenceDiagram
 | Measure | Where applied |
 |---|---|
 | CEI (Check-Effects-Interactions) | `withdrawTokens` — state cleared before external transfer |
-| `ReentrancyGuard` | All three user-facing functions |
+| `ReentrancyGuard` | `depositToken`, `claimRewards`, `withdrawTokens` and `withdrawEther` |
 | `SafeERC20` | `depositToken` and `withdrawTokens` |
 | `Ownable2Step` | Ownership transfers require explicit acceptance |
 | `Pausable` | `depositToken` and `claimRewards` gated; `withdrawTokens` intentionally excluded |
@@ -117,30 +125,33 @@ The reentrancy test includes a purpose-built `ReentrantAttacker` contract that a
 
 ## Testing
 
-62 tests across five suites (`forge test`):
+106 tests across six suites (`forge test`), with 100% line coverage of `src/`:
 
 | Suite | Type | Coverage |
 |---|---|---|
-| `StakingAppTest.t.sol` | Unit — happy path, reverts, access control, pause | `StakingApp`: 100% lines |
-| `StakingTokenTest.t.sol` | Unit — mint, distribute, access control | `StakingToken`: 100% lines |
-| `StakingAppFuzz.t.sol` | Fuzz — deposit amount boundaries, claim timing, period config | 256 runs per test |
-| `StakingAppInvariant.t.sol` | Invariant — token balance, ETH balance and NFT ownership consistency | 256 sequences · 32,768 calls each |
+| `StakingAppTest.t.sol` | Unit — deposits, multi-period claims, bearer semantics after an NFT transfer, `withdrawEther`, access control, pause | `StakingApp`: 100% lines |
+| `StakingNFTTest.t.sol` | Unit — mint and burn authorization, token URI, descriptor swap, two-step ownership | `StakingNFT`: 100% lines |
+| `StakingNFTDescriptor.t.sol` | Unit — exact JSON and SVG output | `StakingNFTDescriptor` |
+| `StakingTokenTest.t.sol` | Unit — mint, distribute, access control, two-step ownership | `StakingToken`: 100% lines |
+| `StakingAppFuzz.t.sol` | Fuzz — deposit amounts, claim timing and payout for any elapsed time, period bounds at deployment | 256 runs per test |
+| `StakingAppInvariant.t.sol` | Invariant — token and ETH balances, positions with a running timer, NFT balances, nothing claimable right after a claim, ETH never withdrawn while a position is open | 256 sequences · 32,768 calls each |
 
 CI runs `forge fmt --check`, `forge build`, `forge test` (higher fuzz runs via `FOUNDRY_PROFILE=ci`), a line-coverage gate of 95% on `src/`, `forge snapshot --check` and Slither static analysis on every push. See also [SECURITY.md](SECURITY.md). The gas snapshot blocks any unreviewed gas regression from merging; Slither blocks any new finding in `src/`.
 
-**Gas (median, production functions):**
+**Gas (median over the unit suites, `forge test --gas-report`):**
 
 | Function | Median gas |
 |---|---|
-| `depositToken` | ~75,000 |
-| `withdrawTokens` | ~47,000 |
-| `claimRewards` | ~38,000 |
+| `depositToken` | ~220,000 (includes minting the NFT) |
+| `withdrawTokens` | ~82,000 (includes burning the NFT) |
+| `claimRewards` | ~46,000 |
+| `claimableRewards` (view) | ~3,000 |
 
 ## Tech Stack
 
-- **Solidity** `^0.8.24` — compiled with `solc 0.8.35`
+- **Solidity** `0.8.24` — pinned in `foundry.toml`, EVM version `cancun`
 - **Foundry** `1.7.1` — Forge, Anvil, Cast
-- **OpenZeppelin Contracts** `v5.7.0` — ERC20, SafeERC20, Ownable2Step, ReentrancyGuard, Pausable
+- **OpenZeppelin Contracts** `v5.7.0` — ERC20, ERC721, SafeERC20, Ownable2Step, ReentrancyGuard, Pausable, Base64, Strings
 - **forge-std** `v1.16.2`
 
 ## Getting Started
@@ -175,12 +186,19 @@ forge script script/Deploy.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY -
 
 ```
 src/
-  StakingApp.sol        # Core staking logic
+  StakingApp.sol        # Core staking logic; deploys the StakingNFT
   StakingToken.sol      # ERC20 staking asset
+  StakingNFT.sol        # ERC721 position receipt and bearer title
+  StakingNFTDescriptor.sol  # On-chain SVG + JSON metadata
+  ITokenURIDescriptor.sol   # Renderer interface
 script/
   Deploy.s.sol          # Reproducible deployment script
+  LocalDeploy.s.sol     # Anvil deployment with seeded accounts (used by dev.sh)
+dev.sh                  # Starts Anvil and deploys for local testing
 test/
   StakingAppTest.t.sol  # Unit tests
+  StakingNFTTest.t.sol
+  StakingNFTDescriptor.t.sol
   StakingTokenTest.t.sol
   StakingAppFuzz.t.sol  # Fuzz tests
   StakingAppInvariant.t.sol  # Invariant tests with handler
