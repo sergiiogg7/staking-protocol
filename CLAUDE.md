@@ -27,7 +27,7 @@ forge script script/Deploy.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY -
 
 ### Contratos actuales
 - **`src/StakingToken.sol`** — ERC20 mintable (`ERC20` + `Ownable`). Cap de 1,000,000 STK. Solo el owner puede `mint` o distribuir con `distributeTokens`.
-- **`src/StakingApp.sol`** — lógica de staking (`Ownable2Step` + `ReentrancyGuard` + `Pausable`). Deposita exactamente `fixStakingAmount` tokens, espera `stakingPeriod` segundos y reclama `rewardPerPeriod` ETH. `withdrawTokens` siempre disponible aunque esté en pause. `stakingToken`, `fixStakingAmount` y `rewardPerPeriod` son `immutable`; solo `stakingPeriod` es mutable post-deploy.
+- **`src/StakingApp.sol`** — lógica de staking (`Ownable2Step` + `ReentrancyGuard` + `Pausable`). Deposita exactamente `fixStakingAmount` tokens, espera `stakingPeriod` segundos y reclama `rewardPerPeriod` ETH. `withdrawTokens` siempre disponible aunque esté en pause. `stakingToken`, `stakingNFT`, `stakingPeriod`, `fixStakingAmount` y `rewardPerPeriod` son `immutable`: los parámetros económicos no cambian tras el deploy. `stakingPeriod` se valida en el constructor entre `MIN_STAKING_PERIOD` y `MAX_STAKING_PERIOD`. No existe `changeStakingPeriod`: cambiarlo reescribiría lo ya acumulado por las posiciones abiertas.
 
 ### Contratos Fase 1 completados
 - **`src/StakingNFT.sol`** — ERC-721 receipt. Cada posición de staking es un NFT. Solo `StakingApp` puede mint/burn (`onlyStakingApp`). `tokenURI` generado on-chain: SVG construido en Solidity → base64 → data URI, delegado a `StakingNFTDescriptor` (patrón renderer intercambiable, igual que Uniswap v3). Token IDs empiezan en 1. Es transferible: el NFT es un título al portador.

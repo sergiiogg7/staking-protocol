@@ -77,51 +77,53 @@ contract StakingAppTest is Test {
     }
 
     // -------------------------------------------------------------------------
-    // changeStakingPeriod
+    // constructor
     // -------------------------------------------------------------------------
 
-    function test_changeStakingPeriod_byNonOwner_reverts() external {
-        // Arrange / Act / Assert
-        vm.expectRevert();
-        vm.prank(randomUser);
-        stakingApp.changeStakingPeriod(1 days);
-    }
-
-    function test_changeStakingPeriod_byOwner_updatesValue() external {
-        // Arrange
-        uint256 newPeriod = 1 days;
-
-        // Act
-        vm.prank(owner_);
-        stakingApp.changeStakingPeriod(newPeriod);
-
+    function test_constructor_storesStakingPeriod() external view {
         // Assert
-        assertEq(stakingApp.stakingPeriod(), newPeriod);
+        assertEq(stakingApp.stakingPeriod(), stakingPeriod_);
     }
 
-    function test_changeStakingPeriod_belowMin_revertsWithInvalidStakingPeriod() external {
+    function test_constructor_withPeriodBelowMin_revertsWithInvalidStakingPeriod() external {
         // Arrange
         uint256 tooShort = stakingApp.MIN_STAKING_PERIOD() - 1;
 
         // Act / Assert
         vm.expectRevert(abi.encodeWithSelector(InvalidStakingPeriod.selector, tooShort));
-        vm.prank(owner_);
-        stakingApp.changeStakingPeriod(tooShort);
+        _deployApp(address(stakingToken), address(descriptor), tooShort, fixedStakingAmount_, rewardPerPeriod_);
     }
 
-    function test_changeStakingPeriod_aboveMax_revertsWithInvalidStakingPeriod() external {
+    function test_constructor_withPeriodAboveMax_revertsWithInvalidStakingPeriod() external {
         // Arrange
         uint256 tooLong = stakingApp.MAX_STAKING_PERIOD() + 1;
 
         // Act / Assert
         vm.expectRevert(abi.encodeWithSelector(InvalidStakingPeriod.selector, tooLong));
-        vm.prank(owner_);
-        stakingApp.changeStakingPeriod(tooLong);
+        _deployApp(address(stakingToken), address(descriptor), tooLong, fixedStakingAmount_, rewardPerPeriod_);
     }
 
-    // -------------------------------------------------------------------------
-    // constructor
-    // -------------------------------------------------------------------------
+    function test_constructor_withPeriodAtMinAndMax_accepts() external {
+        // Act
+        StakingApp atMin = _deployApp(
+            address(stakingToken),
+            address(descriptor),
+            stakingApp.MIN_STAKING_PERIOD(),
+            fixedStakingAmount_,
+            rewardPerPeriod_
+        );
+        StakingApp atMax = _deployApp(
+            address(stakingToken),
+            address(descriptor),
+            stakingApp.MAX_STAKING_PERIOD(),
+            fixedStakingAmount_,
+            rewardPerPeriod_
+        );
+
+        // Assert
+        assertEq(atMin.stakingPeriod(), stakingApp.MIN_STAKING_PERIOD());
+        assertEq(atMax.stakingPeriod(), stakingApp.MAX_STAKING_PERIOD());
+    }
 
     function test_constructor_withZeroStakingToken_revertsWithZeroAddress() external {
         // Arrange / Act / Assert

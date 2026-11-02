@@ -104,28 +104,43 @@ contract StakingAppFuzz is Test {
         assertEq(stakingApp.claimableRewards(tokenId), 0);
     }
 
-    // The owner can set any in-bounds staking period and it must be stored correctly.
-    function testFuzz_changeStakingPeriod_byOwner_storesAnyValidValue(uint256 newPeriod_) external {
+    // Any in-bounds staking period must be accepted at deployment and stored correctly.
+    function testFuzz_constructor_withInBoundsPeriod_storesIt(uint256 period_) external {
         // Arrange
-        newPeriod_ = bound(newPeriod_, stakingApp.MIN_STAKING_PERIOD(), stakingApp.MAX_STAKING_PERIOD());
+        period_ = bound(period_, stakingApp.MIN_STAKING_PERIOD(), stakingApp.MAX_STAKING_PERIOD());
 
         // Act
-        vm.prank(owner_);
-        stakingApp.changeStakingPeriod(newPeriod_);
+        StakingApp app = new StakingApp(
+            address(stakingToken),
+            address(descriptor),
+            owner_,
+            period_,
+            fixedStakingAmount_,
+            rewardPerPeriod_,
+            "STK Position",
+            "STKP"
+        );
 
         // Assert
-        assertEq(stakingApp.stakingPeriod(), newPeriod_);
+        assertEq(app.stakingPeriod(), period_);
     }
 
-    // Any out-of-bounds staking period must revert and leave the stored value untouched.
-    function testFuzz_changeStakingPeriod_outOfBounds_reverts(uint256 newPeriod_) external {
+    // Any out-of-bounds staking period must make the deployment revert.
+    function testFuzz_constructor_withOutOfBoundsPeriod_reverts(uint256 period_) external {
         // Arrange
-        vm.assume(newPeriod_ < stakingApp.MIN_STAKING_PERIOD() || newPeriod_ > stakingApp.MAX_STAKING_PERIOD());
+        vm.assume(period_ < stakingApp.MIN_STAKING_PERIOD() || period_ > stakingApp.MAX_STAKING_PERIOD());
 
         // Act / Assert
-        vm.expectRevert(abi.encodeWithSelector(InvalidStakingPeriod.selector, newPeriod_));
-        vm.prank(owner_);
-        stakingApp.changeStakingPeriod(newPeriod_);
-        assertEq(stakingApp.stakingPeriod(), stakingPeriod_);
+        vm.expectRevert(abi.encodeWithSelector(InvalidStakingPeriod.selector, period_));
+        new StakingApp(
+            address(stakingToken),
+            address(descriptor),
+            owner_,
+            period_,
+            fixedStakingAmount_,
+            rewardPerPeriod_,
+            "STK Position",
+            "STKP"
+        );
     }
 }

@@ -12,7 +12,7 @@ This repository has not been externally audited. Security measures are listed be
 | Reentrancy guard on all state-changing user functions | `StakingApp` (`nonReentrant`) |
 | Two-step ownership transfer | `StakingApp` (`Ownable2Step`) |
 | Exit path never paused | `StakingApp.withdrawTokens` |
-| Zero-address, zero-amount and period-bounds validation | `StakingApp` constructor, `changeStakingPeriod` |
+| Zero-address, zero-amount and period-bounds validation | `StakingApp` constructor |
 | Safe ERC20 transfers | `StakingApp` (`SafeERC20`) |
 | Custom errors only, no `require` strings | all contracts in `src/` |
 | Static analysis | Slither in CI (`slither.config.json`) |
@@ -30,7 +30,7 @@ This repository has not been externally audited. Security measures are listed be
 - **Approved operators cannot act.** An address approved through `approve` or `setApprovalForAll` can transfer the NFT but cannot claim or withdraw on its behalf.
 - **Losing the NFT means losing the position.** A phished `setApprovalForAll` signature lets an attacker transfer the NFT and then withdraw the staked tokens.
 - **Rewards are a liability that grows with time.** Every position accrues `rewardPerPeriod` per completed period whether or not it is claimed, and the contract does not reserve ETH for it. If the balance is lower than the amount owed, `claimRewards` reverts with `EthTransferFailed` until the owner funds the contract. The owner is responsible for keeping the balance above `sum(claimableRewards)`.
-- **`changeStakingPeriod` applies to time already accrued.** Both the wait and the amount owed are computed with the current period, so changing it changes what open positions can claim.
+- **Economic parameters are immutable.** `stakingPeriod`, `fixStakingAmount` and `rewardPerPeriod` are fixed at deployment, so the owner cannot change what open positions have accrued. Changing them requires deploying a new `StakingApp`; positions in the old one keep working until withdrawn.
 - **Selling a position with pending rewards.** The buyer collects the reward; the seller can claim just before selling. The price of a position should account for this.
 
 ## Reporting a vulnerability

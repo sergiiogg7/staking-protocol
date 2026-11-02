@@ -45,10 +45,10 @@ error InvalidStakingPeriod(uint256 provided);
 contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
 
-    /// @notice Shortest staking period the owner may configure, in seconds.
+    /// @notice Shortest staking period accepted at deployment, in seconds.
     uint256 public constant MIN_STAKING_PERIOD = 1 minutes;
 
-    /// @notice Longest staking period the owner may configure, in seconds.
+    /// @notice Longest staking period accepted at deployment, in seconds.
     uint256 public constant MAX_STAKING_PERIOD = 365 days;
 
     /// @notice The ERC20 token accepted for staking.
@@ -57,8 +57,10 @@ contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
     /// @notice The ERC-721 contract that mints position receipts on deposit.
     StakingNFT public immutable stakingNFT;
 
-    /// @notice Duration in seconds a user must hold their stake before claiming rewards.
-    uint256 public stakingPeriod;
+    /// @notice Duration in seconds of one staking period; each completed period earns `rewardPerPeriod`.
+    /// @dev Immutable on purpose: rewards owed are computed from it, so changing it would rewrite what
+    ///      open positions have already accrued.
+    uint256 public immutable stakingPeriod;
 
     /// @notice The exact token amount each user must deposit to participate.
     uint256 public immutable fixStakingAmount;
@@ -70,10 +72,6 @@ contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
     ///         Used to calculate whether the staking period has elapsed. 0 means no open position.
     /// @dev Keyed by token ID rather than by address so the timer travels with the NFT when it is transferred.
     mapping(uint256 => uint256) public lastActivity;
-
-    /// @notice Emitted when the owner updates the staking period.
-    /// @param stakingPeriod_ The new staking period in seconds.
-    event ChangeStakingPeriod(uint256 stakingPeriod_);
 
     /// @notice Emitted when a user successfully deposits tokens and receives a position NFT.
     /// @param userAddress_ The address of the depositing user.
@@ -102,7 +100,7 @@ contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
     /// @param stakingToken_ Address of the ERC20 token accepted for staking.
     /// @param descriptor_ Address of the ITokenURIDescriptor used to render position metadata.
     /// @param owner_ Address that will own and manage this contract and the StakingNFT it deploys.
-    /// @param stakingPeriod_ Duration in seconds required between deposit and reward claim.
+    /// @param stakingPeriod_ Duration in seconds of one staking period, within [`MIN_STAKING_PERIOD`, `MAX_STAKING_PERIOD`].
     /// @param fixStakingAmount_ Exact token amount each user must deposit.
     /// @param rewardPerPeriod_ ETH amount paid per completed staking period.
     /// @param nftName_ ERC-721 collection name of the position NFT.
@@ -193,7 +191,7 @@ contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
 
     /// @notice ETH a position could claim right now.
     /// @dev Returns 0 for a position that does not exist or has not completed a period.
-    ///      Computed with the current `stakingPeriod`, exactly as {claimRewards} does.
+    ///      Computed exactly as {claimRewards} does.
     /// @param tokenId_ The position to query.
     /// @return The ETH amount {claimRewards} would pay for `tokenId_` at this block.
     function claimableRewards(uint256 tokenId_) external view returns (uint256) {
@@ -206,16 +204,6 @@ contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
     /// @dev Restricted to the owner to prevent accidental ETH sends from third parties.
     receive() external payable onlyOwner {
         emit EtherSent(msg.value);
-    }
-
-    /// @notice Updates the required staking duration.
-    /// @dev Takes effect immediately; users who have already deposited are subject to the new period.
-    ///      Reverts with {InvalidStakingPeriod} outside [`MIN_STAKING_PERIOD`, `MAX_STAKING_PERIOD`].
-    /// @param stakingPeriod_ New staking period in seconds.
-    function changeStakingPeriod(uint256 stakingPeriod_) external onlyOwner {
-        _validateStakingPeriod(stakingPeriod_);
-        stakingPeriod = stakingPeriod_;
-        emit ChangeStakingPeriod(stakingPeriod_);
     }
 
     /// @dev Reverts with {NotPositionOwner} unless `msg.sender` owns `tokenId_`.

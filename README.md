@@ -32,7 +32,7 @@ The NFT is a bearer instrument: whoever owns it controls the position. Transferr
 ```mermaid
 graph TD
     Owner -->|mint / distributeTokens| STK[StakingToken\nERC20 · Ownable]
-    Owner -->|fund ETH · pause · changeStakingPeriod| APP[StakingApp\nOwnable2Step · ReentrancyGuard · Pausable]
+    Owner -->|fund ETH · pause| APP[StakingApp\nOwnable2Step · ReentrancyGuard · Pausable]
     User -->|approve| STK
     User -->|depositToken\nclaimRewards\nwithdrawTokens| APP
     APP -->|safeTransferFrom / safeTransfer| STK
@@ -91,7 +91,6 @@ sequenceDiagram
 | `claimRewards(uint256 tokenId)` | NFT owner · whenNotPaused | Transfers `rewardPerPeriod` ETH for every completed staking period |
 | `claimableRewards(uint256 tokenId)` | view | ETH that `claimRewards` would pay right now (0 for unknown positions) |
 | `pause() / unpause()` | onlyOwner | Toggles emergency pause |
-| `changeStakingPeriod(uint256)` | onlyOwner | Updates the required staking duration |
 | `receive()` | onlyOwner | Funds the contract with ETH for reward payouts |
 
 ### StakingToken
@@ -110,7 +109,7 @@ sequenceDiagram
 | `SafeERC20` | `depositToken` and `withdrawTokens` |
 | `Ownable2Step` | Ownership transfers require explicit acceptance |
 | `Pausable` | `depositToken` and `claimRewards` gated; `withdrawTokens` intentionally excluded |
-| `immutable` | `stakingToken`, `fixStakingAmount`, `rewardPerPeriod` — cheaper reads, explicit intent |
+| `immutable` | `stakingToken`, `stakingNFT`, `stakingPeriod`, `fixStakingAmount`, `rewardPerPeriod` — cheaper reads, and the economic terms cannot change under open positions |
 | Custom errors with parameters | All reverts — `IncorrectAmount(expected, provided)`, `StakingPeriodNotElapsed(remaining)`, etc. |
 
 The reentrancy test includes a purpose-built `ReentrantAttacker` contract that attempts to re-enter `claimRewards` inside the ETH `receive` hook, confirming `ReentrancyGuard` blocks it correctly.
