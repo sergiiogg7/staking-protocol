@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 /// @notice Thrown when a mint would exceed the maximum token supply.
@@ -21,7 +21,8 @@ error InvalidRecipient(uint256 index);
 /// @title StakingToken
 /// @notice Mintable ERC20 token used as the staking asset in StakingApp.
 /// @dev Supply is hard-capped at MAX_SUPPLY. Only the owner can mint or distribute tokens.
-contract StakingToken is ERC20, Ownable {
+///      Ownership transfers are two-step (Ownable2Step), so a wrong address cannot take control by mistake.
+contract StakingToken is ERC20, Ownable2Step {
     /// @notice Hard cap on the total token supply (1,000,000 tokens with 18 decimals).
     uint256 public constant MAX_SUPPLY = 1_000_000 * 1e18;
 

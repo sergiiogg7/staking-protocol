@@ -10,7 +10,7 @@ This repository has not been externally audited. Security measures are listed be
 |---|---|
 | Strict CEI ordering | `StakingApp.depositToken`, `StakingApp.withdrawTokens` |
 | Reentrancy guard on all state-changing user functions | `StakingApp` (`nonReentrant`) |
-| Two-step ownership transfer | `StakingApp` (`Ownable2Step`) |
+| Two-step ownership transfer | `StakingApp`, `StakingToken`, `StakingNFT` (`Ownable2Step`) |
 | Exit path never paused | `StakingApp.withdrawTokens` |
 | Zero-address, zero-amount and period-bounds validation | `StakingApp` constructor |
 | Safe ERC20 transfers | `StakingApp` (`SafeERC20`) |
@@ -32,6 +32,7 @@ This repository has not been externally audited. Security measures are listed be
 - **Losing the NFT means losing the position.** A phished `setApprovalForAll` signature lets an attacker transfer the NFT and then withdraw the staked tokens.
 - **Rewards are a liability that grows with time.** Every position accrues `rewardPerPeriod` per completed period whether or not it is claimed, and the contract does not reserve ETH for it. If the balance is lower than the amount owed, `claimRewards` reverts with `EthTransferFailed` until the owner funds the contract. The owner is responsible for keeping the balance above `sum(claimableRewards)`.
 - **The owner can recover ETH only when no position is open.** `withdrawEther` reverts with `PositionsStillOpen` while `totalPositions > 0`, so it can never reduce what a staker is able to collect. The cost is that surplus ETH cannot be taken out mid-life, and a single open position blocks recovery. To wind the protocol down: stop funding, let stakers claim and withdraw, then call `withdrawEther`. Pausing is not a wind-down tool, because it blocks `claimRewards`.
+- **Three independent owners.** `StakingApp`, `StakingToken` (can mint up to the cap) and `StakingNFT` (can replace the metadata descriptor) each have their own owner. Transferring one does not move the others, and each transfer needs the new owner to call `acceptOwnership`. `renounceOwnership` remains available on all three and is irreversible.
 - **Economic parameters are immutable.** `stakingPeriod`, `fixStakingAmount` and `rewardPerPeriod` are fixed at deployment, so the owner cannot change what open positions have accrued. Changing them requires deploying a new `StakingApp`; positions in the old one keep working until withdrawn.
 - **Selling a position with pending rewards.** The buyer collects the reward; the seller can claim just before selling. The price of a position should account for this.
 

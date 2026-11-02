@@ -213,6 +213,71 @@ contract StakingNFTTest is Test {
     }
 
     // -------------------------------------------------------------------------
+    // Two-step ownership
+    // -------------------------------------------------------------------------
+
+    function test_transferOwnership_byOwner_setsPendingOwnerWithoutChangingOwner() external {
+        // Act
+        vm.prank(owner_);
+        stakingNFT.transferOwnership(secondUser);
+
+        // Assert
+        assertEq(stakingNFT.owner(), owner_);
+        assertEq(stakingNFT.pendingOwner(), secondUser);
+    }
+
+    function test_transferOwnership_beforeAccept_ownerKeepsSetDescriptorRights() external {
+        // Arrange
+        StakingNFTDescriptor newDescriptor = new StakingNFTDescriptor();
+        vm.startPrank(owner_);
+        stakingNFT.transferOwnership(secondUser);
+
+        // Act
+        stakingNFT.setDescriptor(address(newDescriptor));
+        vm.stopPrank();
+
+        // Assert
+        assertEq(address(stakingNFT.descriptor()), address(newDescriptor));
+    }
+
+    function test_transferOwnership_beforeAccept_pendingOwnerCannotSetDescriptor() external {
+        // Arrange
+        StakingNFTDescriptor newDescriptor = new StakingNFTDescriptor();
+        vm.prank(owner_);
+        stakingNFT.transferOwnership(secondUser);
+
+        // Act / Assert
+        vm.prank(secondUser);
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", secondUser));
+        stakingNFT.setDescriptor(address(newDescriptor));
+    }
+
+    function test_acceptOwnership_byPendingOwner_transfersOwnership() external {
+        // Arrange
+        vm.prank(owner_);
+        stakingNFT.transferOwnership(secondUser);
+
+        // Act
+        vm.prank(secondUser);
+        stakingNFT.acceptOwnership();
+
+        // Assert
+        assertEq(stakingNFT.owner(), secondUser);
+        assertEq(stakingNFT.pendingOwner(), address(0));
+    }
+
+    function test_acceptOwnership_byNonPendingOwner_reverts() external {
+        // Arrange
+        vm.prank(owner_);
+        stakingNFT.transferOwnership(secondUser);
+
+        // Act / Assert
+        vm.prank(unauthorized_);
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", unauthorized_));
+        stakingNFT.acceptOwnership();
+    }
+
+    // -------------------------------------------------------------------------
     // tokenURI
     // -------------------------------------------------------------------------
 

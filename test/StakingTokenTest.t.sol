@@ -136,4 +136,83 @@ contract StakingTokenTest is Test {
 
         vm.stopPrank();
     }
+
+    // -------------------------------------------------------------------------
+    // Two-step ownership
+    // -------------------------------------------------------------------------
+
+    function test_transferOwnership_byOwner_setsPendingOwnerWithoutChangingOwner() external {
+        // Act
+        vm.prank(owner_);
+        stakingToken.transferOwnership(user2);
+
+        // Assert
+        assertEq(stakingToken.owner(), owner_);
+        assertEq(stakingToken.pendingOwner(), user2);
+    }
+
+    function test_transferOwnership_beforeAccept_ownerKeepsMintRights() external {
+        // Arrange
+        vm.startPrank(owner_);
+        stakingToken.transferOwnership(user2);
+
+        // Act
+        stakingToken.mint(1 ether);
+        vm.stopPrank();
+
+        // Assert
+        assertEq(IERC20(address(stakingToken)).balanceOf(owner_), 1 ether);
+    }
+
+    function test_transferOwnership_beforeAccept_pendingOwnerCannotMint() external {
+        // Arrange
+        vm.prank(owner_);
+        stakingToken.transferOwnership(user2);
+
+        // Act / Assert
+        vm.prank(user2);
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", user2));
+        stakingToken.mint(1 ether);
+    }
+
+    function test_acceptOwnership_byPendingOwner_transfersOwnership() external {
+        // Arrange
+        vm.prank(owner_);
+        stakingToken.transferOwnership(user2);
+
+        // Act
+        vm.prank(user2);
+        stakingToken.acceptOwnership();
+
+        // Assert
+        assertEq(stakingToken.owner(), user2);
+        assertEq(stakingToken.pendingOwner(), address(0));
+    }
+
+    function test_acceptOwnership_byNonPendingOwner_reverts() external {
+        // Arrange
+        vm.prank(owner_);
+        stakingToken.transferOwnership(user2);
+
+        // Act / Assert
+        vm.prank(randomUser);
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", randomUser));
+        stakingToken.acceptOwnership();
+    }
+
+    function test_transferOwnership_toCorrectedAddress_replacesPendingOwner() external {
+        // Arrange
+        vm.startPrank(owner_);
+        stakingToken.transferOwnership(user2);
+
+        // Act
+        stakingToken.transferOwnership(user3);
+        vm.stopPrank();
+
+        // Assert
+        assertEq(stakingToken.pendingOwner(), user3);
+        vm.prank(user2);
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", user2));
+        stakingToken.acceptOwnership();
+    }
 }

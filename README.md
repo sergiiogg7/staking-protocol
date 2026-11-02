@@ -31,7 +31,7 @@ The NFT is a bearer instrument: whoever owns it controls the position. Transferr
 
 ```mermaid
 graph TD
-    Owner -->|mint / distributeTokens| STK[StakingToken\nERC20 · Ownable]
+    Owner -->|mint / distributeTokens| STK[StakingToken\nERC20 · Ownable2Step]
     Owner -->|fund ETH · withdrawEther when no positions · pause| APP[StakingApp\nOwnable2Step · ReentrancyGuard · Pausable]
     User -->|approve| STK
     User -->|depositToken\nclaimRewards\nwithdrawTokens| APP
@@ -76,7 +76,7 @@ sequenceDiagram
 | Periodic ETH rewards | Fixed ETH payout per completed staking period; unclaimed periods accumulate and the leftover time is kept |
 | Emergency pause | Owner can pause `depositToken` and `claimRewards`; `withdrawTokens` is always open |
 | Safe token transfers | `SafeERC20` wraps all ERC20 calls to handle non-standard return values |
-| Two-step ownership | `Ownable2Step` prevents accidental ownership transfers |
+| Two-step ownership | `Ownable2Step` on `StakingApp`, `StakingToken` and `StakingNFT` prevents accidental ownership transfers |
 | Typed custom errors | All reverts use Solidity custom errors with parameters for gas efficiency and debuggability |
 | Indexed events | `DepositTokens`, `WithdrawTokens` and `RewardsClaimed` index the user address for off-chain filtering |
 

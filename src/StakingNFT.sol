@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "./ITokenURIDescriptor.sol";
 
@@ -23,7 +23,7 @@ error InvalidDescriptor();
 ///      updated without modifying this contract or its ownership records.
 ///      Token IDs start at 1, so 0 is never a valid position.
 ///      The NFT is transferable and StakingApp treats its owner as the controller of the position.
-contract StakingNFT is ERC721, Ownable {
+contract StakingNFT is ERC721, Ownable2Step {
     /// @notice The StakingApp contract that is the sole authorized minter and burner.
     address public immutable stakingApp;
 
