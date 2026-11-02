@@ -339,6 +339,147 @@ contract StakingAppTest is Test {
     }
 
     // -------------------------------------------------------------------------
+    // claimRewards — multiple periods
+    // -------------------------------------------------------------------------
+
+    function test_claimRewards_afterSeveralPeriods_paysOneRewardPerCompletedPeriod() external {
+        // Arrange
+        uint256 tokenId = _stakeAs(randomUser);
+        _fundContractWithEth();
+        vm.warp(block.timestamp + 3 * stakingPeriod_);
+        uint256 ethBefore = randomUser.balance;
+
+        // Act
+        vm.prank(randomUser);
+        stakingApp.claimRewards(tokenId);
+
+        // Assert
+        assertEq(randomUser.balance - ethBefore, 3 * rewardPerPeriod_);
+    }
+
+    function test_claimRewards_afterSeveralPeriods_emitsTotalAmount() external {
+        // Arrange
+        uint256 tokenId = _stakeAs(randomUser);
+        _fundContractWithEth();
+        vm.warp(block.timestamp + 3 * stakingPeriod_);
+
+        // Act / Assert
+        vm.expectEmit(true, false, false, true);
+        emit StakingApp.RewardsClaimed(randomUser, 3 * rewardPerPeriod_);
+        vm.prank(randomUser);
+        stakingApp.claimRewards(tokenId);
+    }
+
+    function test_claimRewards_withPartialPeriod_paysOnlyCompletedPeriods() external {
+        // Arrange
+        uint256 tokenId = _stakeAs(randomUser);
+        _fundContractWithEth();
+        vm.warp(block.timestamp + 2 * stakingPeriod_ + stakingPeriod_ / 2);
+        uint256 ethBefore = randomUser.balance;
+
+        // Act
+        vm.prank(randomUser);
+        stakingApp.claimRewards(tokenId);
+
+        // Assert
+        assertEq(randomUser.balance - ethBefore, 2 * rewardPerPeriod_);
+    }
+
+    function test_claimRewards_withPartialPeriod_keepsLeftoverTimeCounting() external {
+        // Arrange
+        uint256 tokenId = _stakeAs(randomUser);
+        _fundContractWithEth();
+        uint256 depositTime = block.timestamp;
+        vm.warp(depositTime + 2 * stakingPeriod_ + stakingPeriod_ / 2);
+
+        // Act
+        vm.prank(randomUser);
+        stakingApp.claimRewards(tokenId);
+
+        // Assert
+        assertEq(stakingApp.lastActivity(tokenId), depositTime + 2 * stakingPeriod_);
+    }
+
+    function test_claimRewards_rightAfterPartialClaim_revertsWithRemainingLeftoverTime() external {
+        // Arrange
+        uint256 tokenId = _stakeAs(randomUser);
+        _fundContractWithEth();
+        vm.warp(block.timestamp + 2 * stakingPeriod_ + stakingPeriod_ / 2);
+        vm.prank(randomUser);
+        stakingApp.claimRewards(tokenId);
+
+        // Act / Assert
+        vm.prank(randomUser);
+        vm.expectRevert(abi.encodeWithSelector(StakingPeriodNotElapsed.selector, stakingPeriod_ / 2));
+        stakingApp.claimRewards(tokenId);
+    }
+
+    function test_claimRewards_whenBalanceCoversOnlyPartOfTheDebt_revertsWithEthTransferFailed() external {
+        // Arrange
+        uint256 tokenId = _stakeAs(randomUser);
+        vm.deal(owner_, 2 * rewardPerPeriod_);
+        vm.prank(owner_);
+        (bool funded,) = address(stakingApp).call{value: 2 * rewardPerPeriod_}("");
+        assertTrue(funded);
+        vm.warp(block.timestamp + 3 * stakingPeriod_);
+
+        // Act / Assert
+        vm.prank(randomUser);
+        vm.expectRevert(EthTransferFailed.selector);
+        stakingApp.claimRewards(tokenId);
+    }
+
+    // -------------------------------------------------------------------------
+    // claimableRewards
+    // -------------------------------------------------------------------------
+
+    function test_claimableRewards_beforeFirstPeriod_returnsZero() external {
+        // Arrange
+        uint256 tokenId = _stakeAs(randomUser);
+        vm.warp(block.timestamp + stakingPeriod_ - 1);
+
+        // Act / Assert
+        assertEq(stakingApp.claimableRewards(tokenId), 0);
+    }
+
+    function test_claimableRewards_afterSeveralPeriods_returnsRewardPerCompletedPeriod() external {
+        // Arrange
+        uint256 tokenId = _stakeAs(randomUser);
+        vm.warp(block.timestamp + 3 * stakingPeriod_ + stakingPeriod_ / 2);
+
+        // Act / Assert
+        assertEq(stakingApp.claimableRewards(tokenId), 3 * rewardPerPeriod_);
+    }
+
+    function test_claimableRewards_forNonexistentToken_returnsZero() external view {
+        // Act / Assert
+        assertEq(stakingApp.claimableRewards(999), 0);
+    }
+
+    function test_claimableRewards_afterClaim_returnsZero() external {
+        // Arrange
+        uint256 tokenId = _stakeAs(randomUser);
+        _fundContractWithEth();
+        vm.warp(block.timestamp + 2 * stakingPeriod_ + stakingPeriod_ / 2);
+        vm.prank(randomUser);
+        stakingApp.claimRewards(tokenId);
+
+        // Act / Assert
+        assertEq(stakingApp.claimableRewards(tokenId), 0);
+    }
+
+    function test_claimableRewards_afterWithdraw_returnsZero() external {
+        // Arrange
+        uint256 tokenId = _stakeAs(randomUser);
+        vm.warp(block.timestamp + 3 * stakingPeriod_);
+        vm.prank(randomUser);
+        stakingApp.withdrawTokens(tokenId);
+
+        // Act / Assert
+        assertEq(stakingApp.claimableRewards(tokenId), 0);
+    }
+
+    // -------------------------------------------------------------------------
     // Bearer semantics: the NFT owner controls the position
     // -------------------------------------------------------------------------
 

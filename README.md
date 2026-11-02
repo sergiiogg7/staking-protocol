@@ -22,7 +22,7 @@ The protocol consists of two contracts:
 1. Owner deploys both contracts, setting a 30-day staking period, a fixed amount of 1 STK, and a 0.01 ETH reward per period.
 2. Owner mints tokens and funds `StakingApp` with ETH.
 3. User approves `StakingApp` to spend 1 STK and calls `depositToken(1e18)`. The call mints a position NFT and returns its `tokenId`.
-4. After 30 days, the owner of the NFT calls `claimRewards(tokenId)` and receives 0.01 ETH. The staking period resets — the position can be claimed again after another 30 days without re-depositing.
+4. After 30 days, the owner of the NFT calls `claimRewards(tokenId)` and receives 0.01 ETH. Rewards accrue per completed period: claiming after 75 days pays 2 × 0.01 ETH and the remaining 15 days keep counting toward the next period. No re-deposit is needed.
 5. The owner of the NFT can call `withdrawTokens(tokenId)` at any time to recover the staked tokens and burn the NFT, including while the contract is paused.
 
 The NFT is a bearer instrument: whoever owns it controls the position. Transferring the NFT transfers the right to claim and withdraw, together with the staking time already accrued.
@@ -58,8 +58,8 @@ sequenceDiagram
 
     User->>StakingApp: claimRewards(tokenId)
     Note over StakingApp: requires ownerOf(tokenId) == user
-    StakingApp-->>User: transfer rewardPerPeriod ETH
-    Note over StakingApp: resets lastActivity[tokenId]
+    StakingApp-->>User: transfer rewardPerPeriod ETH per completed period
+    Note over StakingApp: advances lastActivity[tokenId] by whole periods
 
     User->>StakingApp: withdrawTokens(tokenId)
     StakingApp->>StakingNFT: burn(tokenId)
@@ -73,7 +73,7 @@ sequenceDiagram
 |---|---|
 | Fixed-amount staking | Each position holds exactly `fixStakingAmount` tokens; an address can open several positions |
 | Transferable positions | Each position is an ERC-721; the NFT owner (not an approved operator) can claim and withdraw |
-| Periodic ETH rewards | Fixed ETH payout per completed staking period; period resets on each claim |
+| Periodic ETH rewards | Fixed ETH payout per completed staking period; unclaimed periods accumulate and the leftover time is kept |
 | Emergency pause | Owner can pause `depositToken` and `claimRewards`; `withdrawTokens` is always open |
 | Safe token transfers | `SafeERC20` wraps all ERC20 calls to handle non-standard return values |
 | Two-step ownership | `Ownable2Step` prevents accidental ownership transfers |
@@ -88,7 +88,8 @@ sequenceDiagram
 |---|---|---|
 | `depositToken(uint256)` | public · whenNotPaused | Deposits exactly `fixStakingAmount` tokens, mints a position NFT and returns its `tokenId` |
 | `withdrawTokens(uint256 tokenId)` | NFT owner | Returns staked tokens and burns the NFT; always available, even when paused |
-| `claimRewards(uint256 tokenId)` | NFT owner · whenNotPaused | Transfers `rewardPerPeriod` ETH after staking period elapses |
+| `claimRewards(uint256 tokenId)` | NFT owner · whenNotPaused | Transfers `rewardPerPeriod` ETH for every completed staking period |
+| `claimableRewards(uint256 tokenId)` | view | ETH that `claimRewards` would pay right now (0 for unknown positions) |
 | `pause() / unpause()` | onlyOwner | Toggles emergency pause |
 | `changeStakingPeriod(uint256)` | onlyOwner | Updates the required staking duration |
 | `receive()` | onlyOwner | Funds the contract with ETH for reward payouts |

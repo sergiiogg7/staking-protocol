@@ -21,6 +21,7 @@ contract StakingAppHandler is Test {
 
     uint256 public ghostEthFunded;
     uint256 public ghostEthClaimed;
+    uint256 public ghostClaimsLeavingRewards;
 
     constructor(StakingToken stakingToken_, StakingNFT stakingNFT_, StakingApp stakingApp_, address owner_) {
         stakingToken = stakingToken_;
@@ -78,9 +79,11 @@ contract StakingAppHandler is Test {
 
         elapsed_ = bound(elapsed_, 0, 60 days);
         vm.warp(block.timestamp + elapsed_);
-        if (block.timestamp - stakingApp.lastActivity(tokenId) < stakingApp.stakingPeriod()) return;
+        uint256 period = stakingApp.stakingPeriod();
+        uint256 sinceLastActivity = block.timestamp - stakingApp.lastActivity(tokenId);
+        if (sinceLastActivity < period) return;
 
-        uint256 reward = stakingApp.rewardPerPeriod();
+        uint256 reward = (sinceLastActivity / period) * stakingApp.rewardPerPeriod();
         if (address(stakingApp).balance < reward) {
             vm.deal(owner, reward);
             vm.prank(owner);
@@ -92,6 +95,8 @@ contract StakingAppHandler is Test {
         vm.prank(stakingNFT.ownerOf(tokenId));
         stakingApp.claimRewards(tokenId);
         ghostEthClaimed += reward;
+
+        if (stakingApp.claimableRewards(tokenId) != 0) ghostClaimsLeavingRewards++;
     }
 
     function stakersLength() external view returns (uint256) {
@@ -155,8 +160,14 @@ contract StakingAppInvariant is Test {
         for (uint256 i = 0; i < handler.openTokenIdsLength(); i++) {
             uint256 tokenId = handler.openTokenIds(i);
             assertGt(stakingApp.lastActivity(tokenId), 0);
+            assertLe(stakingApp.lastActivity(tokenId), block.timestamp);
             assertTrue(stakingNFT.ownerOf(tokenId) != address(0));
         }
+    }
+
+    // A claim pays every completed period: right after it, nothing is left to claim.
+    function invariant_claimLeavesNothingClaimable() external view {
+        assertEq(handler.ghostClaimsLeavingRewards(), 0);
     }
 
     // Positions only ever move between known stakers, so their NFT balances add up to the total.

@@ -63,7 +63,7 @@ contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
     /// @notice The exact token amount each user must deposit to participate.
     uint256 public immutable fixStakingAmount;
 
-    /// @notice ETH amount paid to the staker on each successful reward claim.
+    /// @notice ETH amount paid to the staker for each completed staking period.
     uint256 public immutable rewardPerPeriod;
 
     /// @notice Timestamp of the last deposit or successful claim for each position.
@@ -89,7 +89,7 @@ contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
 
     /// @notice Emitted when a user successfully claims their ETH reward.
     /// @param user_ The address of the claiming user.
-    /// @param amount_ The ETH amount sent to the user.
+    /// @param amount_ The ETH amount sent to the user: `rewardPerPeriod` times the periods completed.
     event RewardsClaimed(address indexed user_, uint256 amount_);
 
     /// @notice Emitted when the owner sends ETH to fund the contract.
@@ -169,9 +169,11 @@ contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
         emit WithdrawTokens(msg.sender, fixStakingAmount, tokenId_);
     }
 
-    /// @notice Claims the ETH reward for a position whose staking period has elapsed.
-    /// @dev Resets the position's timestamp on success so the next period begins immediately
-    ///      without requiring a new deposit. Reverts with {NotPositionOwner} unless the caller owns the NFT.
+    /// @notice Claims the ETH reward for every staking period a position has completed since its last claim.
+    /// @dev Pays `rewardPerPeriod` once per completed period. The timer advances by whole periods only, so the
+    ///      time left over after the last completed period keeps counting toward the next one.
+    ///      Reverts with {NotPositionOwner} unless the caller owns the NFT, and with {StakingPeriodNotElapsed}
+    ///      if not even one period has completed.
     /// @param tokenId_ The position to claim for.
     function claimRewards(uint256 tokenId_) external nonReentrant whenNotPaused {
         _requirePositionOwner(tokenId_);
@@ -179,12 +181,25 @@ contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
         uint256 elapsed = block.timestamp - lastActivity[tokenId_];
         if (elapsed < stakingPeriod) revert StakingPeriodNotElapsed(stakingPeriod - elapsed);
 
-        lastActivity[tokenId_] = block.timestamp;
+        uint256 periods = elapsed / stakingPeriod;
+        uint256 reward = periods * rewardPerPeriod;
+        lastActivity[tokenId_] += periods * stakingPeriod;
 
-        (bool success,) = msg.sender.call{value: rewardPerPeriod}("");
+        (bool success,) = msg.sender.call{value: reward}("");
         if (!success) revert EthTransferFailed();
 
-        emit RewardsClaimed(msg.sender, rewardPerPeriod);
+        emit RewardsClaimed(msg.sender, reward);
+    }
+
+    /// @notice ETH a position could claim right now.
+    /// @dev Returns 0 for a position that does not exist or has not completed a period.
+    ///      Computed with the current `stakingPeriod`, exactly as {claimRewards} does.
+    /// @param tokenId_ The position to query.
+    /// @return The ETH amount {claimRewards} would pay for `tokenId_` at this block.
+    function claimableRewards(uint256 tokenId_) external view returns (uint256) {
+        uint256 lastActivity_ = lastActivity[tokenId_];
+        if (lastActivity_ == 0) return 0;
+        return ((block.timestamp - lastActivity_) / stakingPeriod) * rewardPerPeriod;
     }
 
     /// @notice Receives ETH to fund future reward payouts.

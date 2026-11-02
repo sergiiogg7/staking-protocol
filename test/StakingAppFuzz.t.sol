@@ -75,6 +75,35 @@ contract StakingAppFuzz is Test {
         stakingApp.claimRewards(tokenId);
     }
 
+    // After any elapsed time, a claim pays exactly one reward per completed period and
+    // leaves the remainder of the time counting toward the next one.
+    function testFuzz_claimRewards_afterAnyElapsedTime_paysCompletedPeriodsAndKeepsRemainder(uint256 timeElapsed_)
+        external
+    {
+        // Arrange
+        timeElapsed_ = bound(timeElapsed_, stakingPeriod_, 1000 * stakingPeriod_);
+        _fundAndApprove(randomUser, fixedStakingAmount_);
+        vm.prank(randomUser);
+        uint256 tokenId = stakingApp.depositToken(fixedStakingAmount_);
+        uint256 depositTime = block.timestamp;
+        uint256 periods = timeElapsed_ / stakingPeriod_;
+        vm.deal(owner_, periods * rewardPerPeriod_);
+        vm.prank(owner_);
+        (bool funded,) = address(stakingApp).call{value: periods * rewardPerPeriod_}("");
+        assertTrue(funded);
+        vm.warp(depositTime + timeElapsed_);
+        uint256 ethBefore = randomUser.balance;
+
+        // Act
+        vm.prank(randomUser);
+        stakingApp.claimRewards(tokenId);
+
+        // Assert
+        assertEq(randomUser.balance - ethBefore, periods * rewardPerPeriod_);
+        assertEq(stakingApp.lastActivity(tokenId), depositTime + periods * stakingPeriod_);
+        assertEq(stakingApp.claimableRewards(tokenId), 0);
+    }
+
     // The owner can set any in-bounds staking period and it must be stored correctly.
     function testFuzz_changeStakingPeriod_byOwner_storesAnyValidValue(uint256 newPeriod_) external {
         // Arrange
