@@ -36,7 +36,7 @@ forge script script/Deploy.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY -
 - **`src/StakingNFTDescriptor.sol`** — renderer concreto. SVG on-chain con el id y el importe en wei crudo (`Amount (wei)`); la fecha de apertura va solo como atributo JSON `display_type: "date"`. El formateo de unidades (`formatUnits`) lo hace el frontend.
 
 ### Frontend (Fase 3)
-Se construye desde cero con viem v2 + wagmi v2, paso a paso y con enfoque de mentoría (framework por decidir). Tres rutas previstas: `/` (My Position), `/activity` (event log + Chainlink ETH/USD), `/admin` (owner panel). Vivirá en `/frontend` dentro del mismo repo. Scaffold-eth 2 se probó y se descartó.
+Se construye desde cero con Vite + React + TypeScript + viem v2 + wagmi v2, paso a paso y con enfoque de mentoría. SPA sin servidor (se descartó Next.js: no se necesita SSR y obliga a configurar hidratación de wagmi). Se instala con `npm`. Tres rutas previstas: `/` (My Position), `/activity` (event log + Chainlink ETH/USD), `/admin` (owner panel). Vivirá en `/frontend` dentro del mismo repo. Scaffold-eth 2 se probó y se descartó.
 
 ## Testing
 

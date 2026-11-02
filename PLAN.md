@@ -140,7 +140,7 @@ StakingApp   : (pendiente)
 ### Setup
 
 - ✅ Scaffold-eth 2 eliminado (revert de `5017336`): se parte de cero
-- 🔲 Elegir framework y crear `/frontend` mínimo
+- ✅ Framework elegido: Vite + React + TypeScript (SPA sin servidor: menos boilerplate que Next.js, que ya se usa en `nft-marketplace`). `/frontend` creado con `create-vite` (Vite 8, React 19, TypeScript 7). Rutas con React Router; estilos con Tailwind
 - 🔲 Cliente viem: leer del contrato en Anvil (`readContract`) para entender RPC + ABI + dirección
 - 🔲 Añadir wagmi: config, conectores de wallet y primeros hooks
 - 🔲 Importar ABIs de `out/` como `as const`
