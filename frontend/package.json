@@ -7,11 +7,14 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "sync-abis": "node scripts/sync-abis.mjs",
+    "playground:read": "node src/playground/readChain.ts"
   },
   "dependencies": {
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "viem": "^2.57.14"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

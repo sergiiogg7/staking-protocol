@@ -141,9 +141,9 @@ StakingApp   : (pendiente)
 
 - ✅ Scaffold-eth 2 eliminado (revert de `5017336`): se parte de cero
 - ✅ Framework elegido: Vite + React + TypeScript (SPA sin servidor: menos boilerplate que Next.js, que ya se usa en `nft-marketplace`). `/frontend` creado con `create-vite` (Vite 8, React 19, TypeScript 7). Rutas con React Router; estilos con Tailwind
-- 🔲 Cliente viem: leer del contrato en Anvil (`readContract`) para entender RPC + ABI + dirección
+- ✅ Cliente viem: leer del contrato en Anvil (`readContract`, `getContractEvents`, `getBalance`) para entender RPC + ABI + dirección. Scripts en `frontend/src/playground/` (`readChain.ts`, `errorDecoding.ts`); se borran al empezar la UI
 - 🔲 Añadir wagmi: config, conectores de wallet y primeros hooks
-- 🔲 Importar ABIs de `out/` como `as const`
+- ✅ Importar ABIs de `out/` como `as const`: `npm run sync-abis` (tras `forge build`) genera `frontend/src/abi/*.ts`, que se commitean para que el frontend compile sin Foundry. Para decodificar errores hay que fusionar el ABI de `StakingApp` con el de `StakingNFT` (`ERC721NonexistentToken` lo lanza el NFT)
 - 🔲 Prueba E2E en Anvil con `dev.sh`: fondear, aprobar, depositar, reclamar, retirar
 - 🔲 Configurar Sepolia
 - ✅ Instalar skills antes de arrancar la Fase 3:
