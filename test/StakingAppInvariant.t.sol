@@ -22,6 +22,8 @@ contract StakingAppHandler is Test {
     uint256 public ghostEthFunded;
     uint256 public ghostEthClaimed;
     uint256 public ghostClaimsLeavingRewards;
+    uint256 public ghostEthWithdrawn;
+    uint256 public ghostWithdrawsWhileOpen;
 
     constructor(StakingToken stakingToken_, StakingNFT stakingNFT_, StakingApp stakingApp_, address owner_) {
         stakingToken = stakingToken_;
@@ -99,6 +101,27 @@ contract StakingAppHandler is Test {
         if (stakingApp.claimableRewards(tokenId) != 0) ghostClaimsLeavingRewards++;
     }
 
+    function ownerFundsEther(uint256 amount_) external {
+        amount_ = bound(amount_, 1, 10 ether);
+
+        vm.deal(owner, amount_);
+        vm.prank(owner);
+        (bool ok,) = address(stakingApp).call{value: amount_}("");
+        assertTrue(ok);
+        ghostEthFunded += amount_;
+    }
+
+    function ownerWithdrawsEther() external {
+        uint256 openPositions = stakingNFT.totalPositions();
+        uint256 balance = address(stakingApp).balance;
+
+        vm.prank(owner);
+        try stakingApp.withdrawEther() {
+            if (openPositions != 0) ghostWithdrawsWhileOpen++;
+            ghostEthWithdrawn += balance;
+        } catch {}
+    }
+
     function stakersLength() external view returns (uint256) {
         return stakers.length;
     }
@@ -148,9 +171,18 @@ contract StakingAppInvariant is Test {
         );
     }
 
-    // The app's ETH balance is exactly what the owner funded minus what stakers claimed.
-    function invariant_ethBalanceEqualsFundedMinusClaimed() external view {
-        assertEq(address(stakingApp).balance, handler.ghostEthFunded() - handler.ghostEthClaimed());
+    // The app's ETH balance is exactly what the owner funded minus what stakers claimed and the owner recovered.
+    function invariant_ethBalanceEqualsFundedMinusClaimedAndWithdrawn() external view {
+        assertEq(
+            address(stakingApp).balance,
+            handler.ghostEthFunded() - handler.ghostEthClaimed() - handler.ghostEthWithdrawn()
+        );
+    }
+
+    // The owner can never take ETH out while a position is open, so withdrawing ETH
+    // never reduces what a staker is able to collect.
+    function invariant_etherNeverWithdrawnWhilePositionsOpen() external view {
+        assertEq(handler.ghostWithdrawsWhileOpen(), 0);
     }
 
     // Every position the handler considers open is a live NFT with a running timer,

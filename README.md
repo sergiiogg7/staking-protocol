@@ -32,7 +32,7 @@ The NFT is a bearer instrument: whoever owns it controls the position. Transferr
 ```mermaid
 graph TD
     Owner -->|mint / distributeTokens| STK[StakingToken\nERC20 · Ownable]
-    Owner -->|fund ETH · pause| APP[StakingApp\nOwnable2Step · ReentrancyGuard · Pausable]
+    Owner -->|fund ETH · withdrawEther when no positions · pause| APP[StakingApp\nOwnable2Step · ReentrancyGuard · Pausable]
     User -->|approve| STK
     User -->|depositToken\nclaimRewards\nwithdrawTokens| APP
     APP -->|safeTransferFrom / safeTransfer| STK
@@ -92,6 +92,7 @@ sequenceDiagram
 | `claimableRewards(uint256 tokenId)` | view | ETH that `claimRewards` would pay right now (0 for unknown positions) |
 | `pause() / unpause()` | onlyOwner | Toggles emergency pause |
 | `receive()` | onlyOwner | Funds the contract with ETH for reward payouts |
+| `withdrawEther()` | onlyOwner | Sends the whole ETH balance to the owner; only allowed when no position is open |
 
 ### StakingToken
 

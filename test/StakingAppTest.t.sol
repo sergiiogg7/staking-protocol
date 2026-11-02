@@ -556,6 +556,117 @@ contract StakingAppTest is Test {
     }
 
     // -------------------------------------------------------------------------
+    // withdrawEther
+    // -------------------------------------------------------------------------
+
+    function test_withdrawEther_byNonOwner_reverts() external {
+        // Arrange
+        _fundContractWithEth();
+
+        // Act / Assert
+        vm.prank(randomUser);
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", randomUser));
+        stakingApp.withdrawEther();
+    }
+
+    function test_withdrawEther_withOpenPosition_revertsWithPositionsStillOpen() external {
+        // Arrange
+        _stakeAs(randomUser);
+        _fundContractWithEth();
+
+        // Act / Assert
+        vm.prank(owner_);
+        vm.expectRevert(abi.encodeWithSelector(PositionsStillOpen.selector, 1));
+        stakingApp.withdrawEther();
+    }
+
+    function test_withdrawEther_withOpenPositionAndPaused_stillReverts() external {
+        // Arrange
+        _stakeAs(randomUser);
+        _fundContractWithEth();
+        vm.startPrank(owner_);
+        stakingApp.pause();
+
+        // Act / Assert
+        vm.expectRevert(abi.encodeWithSelector(PositionsStillOpen.selector, 1));
+        stakingApp.withdrawEther();
+        vm.stopPrank();
+    }
+
+    function test_withdrawEther_withNoPositions_sendsWholeBalanceToOwner() external {
+        // Arrange
+        _fundContractWithEth();
+        uint256 ownerBalanceBefore = owner_.balance;
+        uint256 contractBalance = address(stakingApp).balance;
+
+        // Act
+        vm.prank(owner_);
+        stakingApp.withdrawEther();
+
+        // Assert
+        assertEq(owner_.balance - ownerBalanceBefore, contractBalance);
+        assertEq(address(stakingApp).balance, 0);
+    }
+
+    function test_withdrawEther_afterLastPositionWithdraws_succeeds() external {
+        // Arrange
+        uint256 tokenId = _stakeAs(randomUser);
+        _fundContractWithEth();
+        vm.prank(randomUser);
+        stakingApp.withdrawTokens(tokenId);
+
+        // Act
+        vm.prank(owner_);
+        stakingApp.withdrawEther();
+
+        // Assert
+        assertEq(address(stakingApp).balance, 0);
+    }
+
+    function test_withdrawEther_emitsEtherWithdrawn() external {
+        // Arrange
+        _fundContractWithEth();
+        uint256 contractBalance = address(stakingApp).balance;
+
+        // Act / Assert
+        vm.expectEmit(false, false, false, true);
+        emit StakingApp.EtherWithdrawn(contractBalance);
+        vm.prank(owner_);
+        stakingApp.withdrawEther();
+    }
+
+    function test_withdrawEther_withNoEther_revertsWithZeroAmount() external {
+        // Arrange / Act / Assert
+        vm.prank(owner_);
+        vm.expectRevert(ZeroAmount.selector);
+        stakingApp.withdrawEther();
+    }
+
+    function test_withdrawEther_whenOwnerRejectsEther_revertsWithEthTransferFailed() external {
+        // Arrange
+        address rejecter = address(new EtherRejecter());
+        StakingApp app = new StakingApp(
+            address(stakingToken),
+            address(descriptor),
+            rejecter,
+            stakingPeriod_,
+            fixedStakingAmount_,
+            rewardPerPeriod_,
+            "STK Position",
+            "STKP"
+        );
+        vm.deal(rejecter, 1 ether);
+        vm.prank(rejecter);
+        (bool funded,) = address(app).call{value: 1 ether}("");
+        assertTrue(funded);
+
+        // Act / Assert
+        vm.prank(rejecter);
+        vm.expectRevert(EthTransferFailed.selector);
+        app.withdrawEther();
+    }
+
+    // -------------------------------------------------------------------------
     // Ownership
     // -------------------------------------------------------------------------
 
@@ -696,6 +807,8 @@ contract StakingAppTest is Test {
         stakingApp.unpause();
     }
 }
+
+contract EtherRejecter {}
 
 contract ReentrantAttacker {
     StakingApp public stakingApp;

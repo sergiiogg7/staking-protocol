@@ -28,8 +28,12 @@ error EthTransferFailed();
 /// @notice Thrown when a required address argument is the zero address.
 error ZeroAddress();
 
-/// @notice Thrown when a required amount argument is zero.
+/// @notice Thrown when a required amount argument is zero, or when there is no ETH to withdraw.
 error ZeroAmount();
+
+/// @notice Thrown when the owner tries to withdraw ETH while positions that could still claim it are open.
+/// @param openPositions Number of positions currently open.
+error PositionsStillOpen(uint256 openPositions);
 
 /// @notice Thrown when a staking period falls outside the allowed bounds.
 /// @param provided The rejected staking period in seconds.
@@ -93,6 +97,10 @@ contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
     /// @notice Emitted when the owner sends ETH to fund the contract.
     /// @param amount_ The ETH amount received.
     event EtherSent(uint256 amount_);
+
+    /// @notice Emitted when the owner recovers the contract's ETH after every position has closed.
+    /// @param amount_ The ETH amount sent to the owner.
+    event EtherWithdrawn(uint256 amount_);
 
     /// @notice Deploys the staking contract with the given configuration.
     /// @dev Deploys the StakingNFT itself so it is wired to `address(this)` by construction,
@@ -204,6 +212,23 @@ contract StakingApp is Ownable2Step, ReentrancyGuard, Pausable {
     /// @dev Restricted to the owner to prevent accidental ETH sends from third parties.
     receive() external payable onlyOwner {
         emit EtherSent(msg.value);
+    }
+
+    /// @notice Sends the contract's whole ETH balance to the owner once no position is open.
+    /// @dev Allowed only when `totalPositions` is 0: with no open position nobody can claim, so the ETH is
+    ///      surplus and withdrawing it can never reduce what a staker is able to collect. While any position
+    ///      is open this reverts with {PositionsStillOpen}. Reverts with {ZeroAmount} if there is no ETH.
+    function withdrawEther() external onlyOwner nonReentrant {
+        uint256 openPositions = stakingNFT.totalPositions();
+        if (openPositions != 0) revert PositionsStillOpen(openPositions);
+
+        uint256 amount = address(this).balance;
+        if (amount == 0) revert ZeroAmount();
+
+        (bool success,) = msg.sender.call{value: amount}("");
+        if (!success) revert EthTransferFailed();
+
+        emit EtherWithdrawn(amount);
     }
 
     /// @dev Reverts with {NotPositionOwner} unless `msg.sender` owns `tokenId_`.
