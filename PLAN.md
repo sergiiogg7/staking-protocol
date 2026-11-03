@@ -166,11 +166,11 @@ StakingApp   : (pendiente)
 ### Ruta `/` — My Position
 
 - 🔲 Conectar wallet (conectores de wagmi)
-- 🔲 Listar las posiciones de la wallet: una dirección puede tener varias y el NFT es transferible. Se obtienen leyendo los eventos `Transfer` del `StakingNFT` con `getLogs` y comprobando `ownerOf` (no hay `ERC721Enumerable`)
-- 🔲 Por posición: NFT (imagen SVG on-chain desde `tokenURI`), tokens stakeados y `claimableRewards(tokenId)` leído del contrato, sin recalcularlo en el frontend
-- 🔲 Formatear importes con `formatUnits` (el descriptor y los contratos devuelven wei crudos)
+- ✅ Listar las posiciones de la wallet: una dirección puede tener varias y el NFT es transferible. `src/lib/positions.ts` (funciones puras: `getReceivedTokenIds` con los `Transfer` recibidos y `readPositions`, que descarta lo vendido o quemado con `ownerOf`), hook `useMyPositions` y componente `PositionsList`. Verificado contra Anvil: una cuenta con un token transferido y otro quemado solo ve el vivo. Pendiente a futuro: leer los logs desde el bloque de despliegue en una red real y refrescar tras cada acción
+- 🔶 Por posición: tokens stakeados, fecha y `claimableRewards(tokenId)` leídos del contrato (hecho); falta la imagen SVG on-chain desde `tokenURI`
+- ✅ Formatear importes con `formatUnits` y `formatEther` (el descriptor y los contratos devuelven wei crudos)
 - 🔲 Botones: `Deposit` (approve y luego `depositToken`, dos transacciones), `Claim` (disabled si `claimableRewards` es 0), `Withdraw`
-- 🔲 Aviso previo al claim si el balance ETH del contrato es menor que lo reclamable (evita pagar gas por un `EthTransferFailed`)
+- 🔲 Aviso previo al claim si el balance ETH del contrato es menor que lo reclamable (evita pagar gas por un `EthTransferFailed`). Caso real medido en Anvil: tras 28 h reales una posición acumuló 1125 periodos de 90 s = 11.25 ETH reclamables, con 1.98 ETH en el contrato, así que el claim falla
 - 🔲 Estados de transacción: pending → confirming → confirmed con toast
 - 🔲 Mapear custom errors del contrato a mensajes legibles (`NotPositionOwner`, `StakingPeriodNotElapsed`, `IncorrectAmount`, `EthTransferFailed`, `EnforcedPause`)
 

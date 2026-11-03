@@ -1,4 +1,5 @@
 import { ConnectButton } from "./components/ConnectButton.tsx";
+import { PositionsList } from "./components/PositionsList.tsx";
 import { ProtocolStats } from "./components/ProtocolStats.tsx";
 
 export default function App() {
@@ -9,6 +10,8 @@ export default function App() {
         <ConnectButton />
       </header>
       <ProtocolStats />
+      <h2>My positions</h2>
+      <PositionsList />
     </main>
   );
 }
