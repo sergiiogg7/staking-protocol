@@ -167,7 +167,7 @@ StakingApp   : (pendiente)
 
 - 🔲 Conectar wallet (conectores de wagmi)
 - ✅ Listar las posiciones de la wallet: una dirección puede tener varias y el NFT es transferible. `src/lib/positions.ts` (funciones puras: `getReceivedTokenIds` con los `Transfer` recibidos y `readPositions`, que descarta lo vendido o quemado con `ownerOf`), hook `useMyPositions` y componente `PositionsList`. Verificado contra Anvil: una cuenta con un token transferido y otro quemado solo ve el vivo. Pendiente a futuro: leer los logs desde el bloque de despliegue en una red real y refrescar tras cada acción
-- 🔶 Por posición: tokens stakeados, fecha y `claimableRewards(tokenId)` leídos del contrato (hecho); falta la imagen SVG on-chain desde `tokenURI`
+- ✅ Por posición: imagen SVG on-chain desde `tokenURI` (`lib/tokenUri.ts`, `useTokenMetadata`, `PositionImage`), tokens stakeados, fecha y `claimableRewards(tokenId)` leídos del contrato. La imagen es contenido no confiable (el owner del NFT puede cambiar el descriptor): solo se muestra en un `<img>` y solo se aceptan imágenes `data:image/` incrustadas
 - ✅ Formatear importes con `formatUnits` y `formatEther` (el descriptor y los contratos devuelven wei crudos)
 - ✅ Botones: `Deposit` (approve por el importe exacto y luego `depositToken`, dos transacciones), `Claim` (desactivado si `claimableRewards` es 0) y `Withdraw`. Capas: `lib/transactions.ts` (simular → firmar → esperar el recibo, verificado con transacciones reales en Anvil), `hooks/useTransaction.ts`, `hooks/useStakingActions.ts` y los componentes `DepositPanel`, `PositionActions` y `TransactionStatus`. Tras cada acción se invalidan las consultas de posiciones y balance. Sin verificar con una wallet real en el navegador
 - ✅ Aviso previo al claim si el balance ETH del contrato es menor que lo reclamable (evita pagar gas por un `EthTransferFailed`): `PositionActions` lo avisa y desactiva `Claim`. Además la simulación previa detecta el revert antes de pedir la firma. Caso real medido en Anvil: tras 28 h reales una posición acumuló 1125 periodos de 90 s = 11.25 ETH reclamables, con 1.98 ETH en el contrato, así que el claim falla
@@ -182,12 +182,12 @@ StakingApp   : (pendiente)
 
 ### Ruta `/admin` — Owner Panel
 
-- 🔲 Visible solo si `address === owner`
-- 🔲 Pause / Unpause
-- 🔲 Enviar ETH al contrato (fund rewards)
-- 🔲 Balance ETH del contrato en tiempo real
-- 🔲 Retirar ETH (`withdrawEther`): botón desactivado con la razón "quedan N posiciones abiertas" (`totalPositions` del NFT) mientras haya alguna
-- 🔲 Mostrar los parámetros inmutables (`stakingPeriod`, `fixStakingAmount`, `rewardPerPeriod`): ya no hay cambio de periodo
+- ✅ Visible solo si la wallet es el owner (`useAdminData`, `isAddressEqual`). Es comodidad, no seguridad: el contrato impone `onlyOwner`
+- ✅ Pause / Unpause
+- ✅ Enviar ETH al contrato (fund rewards): campo controlado, `parseEthAmount` y transacción simple a `receive()`
+- ✅ Balance ETH del contrato (se refresca tras cada acción)
+- ✅ Retirar ETH (`withdrawEther`): botón desactivado con la razón "N position(s) are still open" (`totalPositions` del NFT) mientras haya alguna
+- ✅ Mostrar los parámetros inmutables (`stakingPeriod`, `fixStakingAmount`, `rewardPerPeriod`): ya no hay cambio de periodo
 
 ---
 
@@ -236,3 +236,4 @@ StakingApp   : (pendiente)
 | 2026-11-02 | 3 | Frontend: Vite + React + TypeScript, viem (lectura y escritura contra Anvil), ABIs `as const` con `sync-abis`, wagmi 2.19 con conexión de wallet y lectura del protocolo (`useStakingConfig`, `ConnectButton`, `ProtocolStats`). Guía de estudio `frontend/GUIDE.md` |
 | 2026-11-03 | 3 | Posiciones de la wallet reconstruidas desde los eventos `Transfer` y verificadas con `ownerOf` (`lib/positions.ts`, `useMyPositions`, `PositionsList`) |
 | 2026-11-03 | 3 | Acciones: deposit (approve por el importe exacto y `depositToken`), claim y withdraw con simular → firmar → esperar el recibo, máquina de estados `useTransaction`, errores de los tres contratos traducidos, aviso y bloqueo de `Claim` si el contrato no tiene ETH suficiente |
+| 2026-11-03 | 3 | Imagen del NFT desde `tokenURI` tratada como contenido no confiable. React Router (`/` y `/admin`, `Layout` con `NavLink` y `Outlet`). Panel `/admin` completo: estado del contrato, pausar o reanudar, enviar ETH, `withdrawEther` con el motivo del bloqueo, parámetros inmutables. `describeError` reconoce también el revert de una transacción simple. Pendiente al desplegar: reescritura de rutas a `index.html` (Vercel) para que `/admin` funcione al recargar |

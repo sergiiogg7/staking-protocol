@@ -13,6 +13,8 @@ Material de estudio del frontend, escrito módulo a módulo mientras se construy
 | 6 | Un clic de punta a punta, visto en la pestaña Network | pendiente |
 | 7 | Las posiciones: datos derivados de eventos, funciones puras y un hook fino | hecho |
 | 8 | Las acciones: simular, firmar, esperar y la máquina de estados | hecho |
+| 9 | Contenido no confiable: la imagen del NFT | hecho |
+| 10 | Rutas y el panel de admin | hecho |
 
 ---
 
@@ -726,3 +728,88 @@ Con transacciones reales contra Anvil y una wallet simulada: claim sin ETH sufic
 ### Frase de entrevista
 
 "Cada acción pasa por simular, firmar y esperar el recibo, con un estado explícito (idle, pending, confirming, success, error). Simulo antes para que un revert conocido no cueste gas, aprobo el importe exacto y traduzco los custom errors decodificándolos contra los tres contratos. Lo probé con transacciones reales contra Anvil."
+
+---
+
+## Módulo 9: contenido no confiable (la imagen del NFT)
+
+### El `tokenURI` es un JSON dentro de un data URI, con otro data URI dentro
+
+```
+ tokenURI(2) = "data:application/json;base64,eyJuYW1lIjoi…"
+                      │ base64 → JSON
+                      ▼
+ { "name": "Staking Position #2", "image": "data:image/svg+xml;base64,PHN2Zy…", "attributes": [...] }
+                                                    │ base64 → SVG
+                                                    ▼
+                                         <svg>…Amount (wei): 1000000000000000000…</svg>
+```
+
+`lib/tokenUri.ts` decodifica el primer nivel (`atob` y `TextDecoder` para que el UTF-8 sobreviva), `useTokenMetadata` lo expone como hook (con `select` sobre la caché) y `PositionImage` lo pinta.
+
+### Por qué es contenido no confiable
+
+`StakingNFT.setDescriptor` permite al owner cambiar el contrato que genera el SVG. **Quien controle el descriptor controla lo que ven tus usuarios.** Dos defensas:
+
+| Riesgo | Defensa |
+|---|---|
+| Un SVG con `<script>` ejecutaría código en tu web (XSS) | Se muestra **solo** en un `<img>`: el navegador lo renderiza como imagen y nunca ejecuta scripts. Con `dangerouslySetInnerHTML` sí los ejecutaría |
+| Una imagen en una URL externa permitiría rastrear a quien abre la página | `parseTokenUri` solo acepta imágenes `data:image/` incrustadas |
+
+### Experimento
+
+Con el `tokenURI` real del token #2: nombre `Staking Position #2`, imagen de 706 caracteres, el SVG contiene `Amount (wei)` y **no** contiene `<script`. Con contenido hostil, las cuatro entradas se rechazan: imagen en una URL externa, URI que no es base64 JSON, JSON sin `image` y JSON que no es un objeto.
+
+### Preguntas de control
+
+1. ¿Por qué el SVG se pinta en un `<img>` y no insertándolo en la página?
+2. ¿Quién controla lo que devuelve `tokenURI` y por qué eso importa para el frontend?
+3. ¿Qué riesgo tendría aceptar una imagen en una URL `https://`?
+
+### Frase de entrevista
+
+"El `tokenURI` lo genera un descriptor que el owner puede reemplazar, así que trato su contenido como no confiable: valido la forma del JSON, solo acepto imágenes incrustadas y las muestro únicamente en un `<img>`, donde el navegador no ejecuta scripts de un SVG."
+
+---
+
+## Módulo 10: rutas y el panel de admin
+
+### Rutas en una SPA
+
+Solo hay un `index.html`. React Router decide qué componente pintar según la URL, **sin pedir otra página al servidor**.
+
+```
+ main.tsx   <BrowserRouter>           lee y cambia la URL con la API History del navegador
+              └─ App.tsx   <Routes>   la tabla de rutas
+                   └─ <Route element={<Layout />}>      marco común: título, wallet, navegación
+                        ├─ index          → PositionsPage     (URL "/")
+                        └─ path="admin"   → AdminPage         (URL "/admin")
+ Layout.tsx   <Outlet />   el hueco donde se dibuja la página de la ruta actual
+```
+
+- `NavLink` añade la clase `active` al enlace de la página actual; `end` evita que `/` cuadre con todas las rutas.
+- Al **desplegar**, el hosting debe reescribir toda ruta a `index.html`; si no, recargar `/admin` devuelve un 404 del servidor (lo apunta el `PLAN.md`).
+
+### El panel de admin
+
+`useAdminData` lee `owner`, `paused`, `totalPositions` y el balance de ETH del contrato. `AdminPage` pinta: estado, pausar o reanudar, enviar ETH, retirar ETH y los parámetros fijos.
+
+- **Solo el owner lo ve, pero eso es comodidad, no seguridad.** Cualquiera puede llamar al contrato desde su consola; lo que de verdad protege es el `onlyOwner` del contrato. La interfaz solo evita botones que fallarían. Probado: un usuario normal que pausa recibe "Only the owner of the contract can do this".
+- **`isAddressEqual`** compara direcciones sin depender de mayúsculas y minúsculas.
+- **Campo controlado**: el texto del importe vive en `useState` y el `<input>` solo lo muestra y avisa de los cambios. `parseEthAmount` lo convierte a `bigint` o devuelve `undefined`, y el botón se desactiva si el importe no es válido.
+- **`Withdraw all ETH`** se desactiva con el motivo (`N position(s) are still open`), porque el contrato solo lo permite sin posiciones abiertas.
+- **Enviar ETH** es una transacción simple a `receive()`, que no tiene función en el ABI que simular. Su revert llega con otra forma, y `describeError` busca ahora cualquier causa que lleve `data` en hexadecimal.
+
+### Qué se probó
+
+Rutas con un enrutador en memoria: el enlace activo cambia y cada página muestra lo suyo. Con datos reales de Anvil: un usuario normal ve "only for the contract owner"; el owner ve estado *Active*, 1 posición abierta y 2.48 ETH, con `Pause` activo y `Withdraw all ETH` desactivado. Con transacciones reales: pausar y reanudar, depositar estando pausado, financiar 0.5 ETH, retirar con una posición abierta, y un usuario normal enviando ETH.
+
+### Preguntas de control
+
+1. ¿Por qué ocultar el panel a quien no es owner no es una medida de seguridad?
+2. ¿Qué es un campo controlado y dónde vive el texto que escribe el usuario?
+3. ¿Qué hace `<Outlet />` y por qué hace falta una reescritura de rutas al desplegar?
+
+### Frase de entrevista
+
+"Las rutas son una tabla que decide qué componente pintar dentro de un layout común, sin pedir páginas al servidor. El panel de admin solo lo ve el owner, pero eso es comodidad: la seguridad la impone `onlyOwner` en el contrato, y lo comprobé enviando acciones de owner desde una cuenta normal."
