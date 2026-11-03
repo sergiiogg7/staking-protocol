@@ -38,6 +38,8 @@ export function useTransaction<Variables = void>(run: (variables: Variables, pro
       // The chain changed: positions and balances read before are now stale.
       await queryClient.invalidateQueries({ queryKey: ["myPositions"] });
       await queryClient.invalidateQueries({ queryKey: ["balance"] });
+      // Contract reads such as the paused flag or the number of open positions.
+      await queryClient.invalidateQueries({ queryKey: ["readContracts"] });
     } catch (caught) {
       setError(describeError(caught));
       setPhase("error");

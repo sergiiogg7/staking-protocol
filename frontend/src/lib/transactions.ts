@@ -1,6 +1,6 @@
 import type { Address, Hash } from "viem";
 import type { Config } from "wagmi";
-import { readContract, simulateContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
+import { readContract, sendTransaction, simulateContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
 import { stakingAppAbi } from "../abi/stakingApp.ts";
 import { stakingTokenAbi } from "../abi/stakingToken.ts";
 import { localAddresses } from "../contracts.ts";
@@ -58,4 +58,30 @@ export async function deposit(config: Config, owner: Address, progress: Progress
   progress.step(allowance < amount ? "Step 2 of 2, deposit" : "Deposit");
   const { request } = await simulateContract(config, { ...stakingApp, functionName: "depositToken", args: [amount] });
   return submit(config, () => writeContract(config, request), progress);
+}
+
+// Owner-only actions. They are the same simulate, send and wait sequence; the contract enforces onlyOwner,
+// so a caller who is not the owner is rejected at the simulation, whatever the interface shows.
+
+export async function pause(config: Config, progress: Progress) {
+  const { request } = await simulateContract(config, { ...stakingApp, functionName: "pause" });
+  return submit(config, () => writeContract(config, request), progress);
+}
+
+export async function unpause(config: Config, progress: Progress) {
+  const { request } = await simulateContract(config, { ...stakingApp, functionName: "unpause" });
+  return submit(config, () => writeContract(config, request), progress);
+}
+
+// Reverts with PositionsStillOpen while any position is open: the contract only lets the owner take the ETH
+// back when nobody can claim it any more.
+export async function withdrawEther(config: Config, progress: Progress) {
+  const { request } = await simulateContract(config, { ...stakingApp, functionName: "withdrawEther" });
+  return submit(config, () => writeContract(config, request), progress);
+}
+
+// The contract funds its rewards through receive(), which has no ABI entry to simulate, so the ETH is sent
+// as a plain transaction. receive() is onlyOwner, so anyone else is rejected.
+export async function fundContract(config: Config, amount: bigint, progress: Progress) {
+  return submit(config, () => sendTransaction(config, { to: localAddresses.stakingApp, value: amount }), progress);
 }

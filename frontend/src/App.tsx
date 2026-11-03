@@ -1,19 +1,16 @@
-import { ConnectButton } from "./components/ConnectButton.tsx";
-import { DepositPanel } from "./components/DepositPanel.tsx";
-import { PositionsList } from "./components/PositionsList.tsx";
-import { ProtocolStats } from "./components/ProtocolStats.tsx";
+import { Route, Routes } from "react-router";
+import { Layout } from "./components/Layout.tsx";
+import { AdminPage } from "./pages/AdminPage.tsx";
+import { PositionsPage } from "./pages/PositionsPage.tsx";
 
+// The route table: which page is drawn inside the Layout for each URL.
 export default function App() {
   return (
-    <main>
-      <header>
-        <h1>STK Staking</h1>
-        <ConnectButton />
-      </header>
-      <ProtocolStats />
-      <h2>My positions</h2>
-      <DepositPanel />
-      <PositionsList />
-    </main>
+    <Routes>
+      <Route element={<Layout />}>
+        <Route index element={<PositionsPage />} />
+        <Route path="admin" element={<AdminPage />} />
+      </Route>
+    </Routes>
   );
 }

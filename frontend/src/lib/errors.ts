@@ -1,5 +1,11 @@
-import { BaseError, ContractFunctionRevertedError, UserRejectedRequestError, decodeErrorResult, formatUnits } from "viem";
-import type { Abi } from "viem";
+import {
+  BaseError,
+  ContractFunctionRevertedError,
+  UserRejectedRequestError,
+  decodeErrorResult,
+  formatUnits,
+} from "viem";
+import type { Abi, Hex } from "viem";
 import { stakingAppAbi } from "../abi/stakingApp.ts";
 import { stakingNFTAbi } from "../abi/stakingNFT.ts";
 import { stakingTokenAbi } from "../abi/stakingToken.ts";
@@ -17,17 +23,28 @@ const messages: Record<string, (args: readonly unknown[]) => string> = {
   ERC721NonexistentToken: () => "This position no longer exists.",
   ERC20InsufficientBalance: () => "You do not have enough STK for this deposit.",
   ERC20InsufficientAllowance: () => "The contract is not approved to move your STK yet.",
+  OwnableUnauthorizedAccount: () => "Only the owner of the contract can do this.",
+  PositionsStillOpen: ([open]) => `${open} position(s) are still open. ETH can only be withdrawn when none is open.`,
+  ExpectedPause: () => "The protocol is not paused.",
+  ZeroAmount: () => "The amount must be greater than zero.",
 };
 
-function decodeRevert(reverted: ContractFunctionRevertedError) {
-  if (reverted.data) return { name: reverted.data.errorName, args: reverted.data.args ?? [] };
-  if (!reverted.raw) return undefined;
+function isHexData(value: unknown): value is Hex {
+  return typeof value === "string" && value.startsWith("0x");
+}
+
+function decodeData(data: Hex) {
   try {
-    const decoded = decodeErrorResult({ abi: errorsAbi, data: reverted.raw });
+    const decoded = decodeErrorResult({ abi: errorsAbi, data });
     return { name: decoded.errorName, args: decoded.args ?? [] };
   } catch {
     return undefined;
   }
+}
+
+function decodeRevert(reverted: ContractFunctionRevertedError) {
+  if (reverted.data) return { name: reverted.data.errorName, args: reverted.data.args ?? [] };
+  return reverted.raw ? decodeData(reverted.raw) : undefined;
 }
 
 // Turns anything a transaction can throw into one sentence for the user.
@@ -41,6 +58,14 @@ export function describeError(error: unknown): string {
       const decoded = decodeRevert(reverted);
       if (decoded) return messages[decoded.name]?.(decoded.args) ?? `The transaction would fail (${decoded.name}).`;
       return "The transaction would fail.";
+    }
+
+    // A plain transaction (such as sending ETH) has no function call, so its revert does not arrive as a
+    // ContractFunctionRevertedError: the error bytes sit in `data` of one of the nested causes.
+    const withData = error.walk((cause) => isHexData((cause as { data?: unknown }).data));
+    if (withData) {
+      const decoded = decodeData((withData as unknown as { data: Hex }).data);
+      if (decoded) return messages[decoded.name]?.(decoded.args) ?? `The transaction would fail (${decoded.name}).`;
     }
     return error.shortMessage;
   }

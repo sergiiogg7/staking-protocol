@@ -1,5 +1,13 @@
 import { useAccount, useConfig } from "wagmi";
-import { claimRewards, deposit, withdrawTokens } from "../lib/transactions.ts";
+import {
+  claimRewards,
+  deposit,
+  fundContract,
+  pause,
+  unpause,
+  withdrawEther,
+  withdrawTokens,
+} from "../lib/transactions.ts";
 import { useTransaction } from "./useTransaction.ts";
 
 // One hook per action. Each returns the state machine of useTransaction plus its `execute` function.
@@ -25,5 +33,35 @@ export function useWithdraw() {
   const config = useConfig();
   return useTransaction(async (tokenId: bigint, progress) => {
     await withdrawTokens(config, tokenId, progress);
+  });
+}
+
+// Owner actions, for the admin panel.
+
+export function usePause() {
+  const config = useConfig();
+  return useTransaction(async (_: void, progress) => {
+    await pause(config, progress);
+  });
+}
+
+export function useUnpause() {
+  const config = useConfig();
+  return useTransaction(async (_: void, progress) => {
+    await unpause(config, progress);
+  });
+}
+
+export function useWithdrawEther() {
+  const config = useConfig();
+  return useTransaction(async (_: void, progress) => {
+    await withdrawEther(config, progress);
+  });
+}
+
+export function useFund() {
+  const config = useConfig();
+  return useTransaction(async (amount: bigint, progress) => {
+    await fundContract(config, amount, progress);
   });
 }
