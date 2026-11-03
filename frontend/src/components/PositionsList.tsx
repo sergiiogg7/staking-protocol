@@ -3,6 +3,7 @@ import { useAccount, useBalance } from "wagmi";
 import { localAddresses } from "../contracts.ts";
 import { useMyPositions } from "../hooks/useMyPositions.ts";
 import { PositionActions } from "./PositionActions.tsx";
+import { PositionImage } from "./PositionImage.tsx";
 
 export function PositionsList() {
   const { isConnected } = useAccount();
@@ -21,6 +22,7 @@ export function PositionsList() {
       {positions.map((position) => (
         // `key` lets React tell list items apart between renders; the token id is unique and stable.
         <li key={position.tokenId.toString()}>
+          <PositionImage tokenId={position.tokenId} />
           <strong>Position #{position.tokenId.toString()}</strong>
           <span>Staked {formatUnits(position.depositAmount, 18)} STK</span>
           <span>Since {new Date(Number(position.depositTimestamp) * 1000).toLocaleString()}</span>
