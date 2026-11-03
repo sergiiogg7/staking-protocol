@@ -11,6 +11,7 @@ Material de estudio del frontend, escrito módulo a módulo mientras se construy
 | 4 | La pila web3: viem, wagmi, `wagmi.ts`, `contracts.ts` y el ABI | hecho |
 | 5 | Los playgrounds | pendiente |
 | 6 | Un clic de punta a punta, visto en la pestaña Network | pendiente |
+| 7 | Las posiciones: datos derivados de eventos, funciones puras y un hook fino | hecho |
 
 ---
 
@@ -596,3 +597,58 @@ Provocando errores a propósito para que TypeScript revele el tipo inferido:
 ### Frase de entrevista
 
 "viem es el cliente tipado que habla con la cadena y codifica con el ABI; wagmi añade el estado de la wallet y los hooks de React sobre viem y TanStack Query. Las lecturas van por el transport directo al nodo y las escrituras por la wallet, así la app nunca maneja claves. El ABI lo extraigo de `forge build` como `as const` para que TypeScript infiera los tipos de cada función."
+
+---
+
+## Módulo 7: las posiciones de una wallet
+
+### El problema y cómo se resuelve
+
+`StakingNFT` no es `ERC721Enumerable`, así que no existe "dame los tokens de esta wallet". Se **reconstruye desde los eventos**:
+
+```
+ 1. getContractEvents: Transfer(to = mi wallet)   → todos los tokens que alguna vez recibí
+ 2. ownerOf(tokenId) de cada uno                  → ¿sigue siendo mío? (puedo haberlo vendido o quemado)
+ 3. leer el detalle de los que quedan             → importe, fecha, claimableRewards
+```
+
+El paso 2 es imprescindible: un log prueba que **recibiste** el token, no que lo **tengas**. Un token quemado hace revertir a `ownerOf`, así que esas lecturas se permiten fallar (`allowFailure: true`) y se descartan.
+
+### Estructura del código
+
+| Archivo | Rol |
+|---|---|
+| `src/lib/positions.ts` | **funciones puras** (`getReceivedTokenIds`, `readPositions`): sin React, se pueden probar en Node |
+| `src/hooks/useMyPositions.ts` | hook fino: conecta esas funciones con la config de wagmi y la caché de TanStack Query |
+| `src/components/PositionsList.tsx` | solo pinta: cargando, error, vacío o lista |
+
+Separar la lógica en funciones normales permite comprobarla contra Anvil sin navegador, y deja al hook en 10 líneas.
+
+### Detalles de diseño del hook
+
+- **Clave de caché** `["myPositions", chainId, address]`: cambiar de wallet o de red es otra entrada, así que **nunca** se ven posiciones de la cuenta anterior.
+- **`enabled: address !== undefined`**: sin wallet no se lanza la consulta. Ojo: una consulta desactivada también tiene `isPending`, por eso el componente comprueba **primero** `isConnected`.
+- **`key` en la lista**: React necesita una clave estable por elemento para distinguirlos entre renders; aquí el `tokenId`.
+- Se usa `readContracts` de wagmi y no el `multicall` de viem: Anvil no tiene multicall3, y wagmi cae a lecturas individuales.
+
+### Resultado contra Anvil
+
+| Wallet | Tokens recibidos | Posiciones vivas |
+|---|---|---|
+| #1: recibió el 1 (y lo transfirió) y el 2 | #1, #2 | **#2** |
+| #2: recibió el 1 y el 3, ambos quemados | #1, #3 | ninguna |
+| #5: nunca recibió nada | ninguno | ninguna |
+
+### Un hallazgo real
+
+La posición #2 muestra **11.25 ETH reclamables** con **1.98 ETH** en el contrato. Han pasado 28 horas reales, el reloj de Anvil sigue corriendo y hay 1125 periodos de 90 s completos. Un `Claim` ahora fallaría con `EthTransferFailed`: es el caso que motiva el aviso previo del `PLAN.md`.
+
+### Preguntas de control
+
+1. ¿Por qué no basta con los logs `Transfer` para saber qué posiciones tiene una wallet?
+2. ¿Por qué la dirección y la cadena forman parte de la clave de caché?
+3. ¿Qué ventaja tiene poner la lógica en funciones puras y no dentro del hook?
+
+### Frase de entrevista
+
+"Como el NFT no es enumerable, reconstruyo las posiciones desde los eventos `Transfer` recibidos y las verifico con `ownerOf`, porque un log solo prueba que se recibió el token. La lógica son funciones puras que probé contra Anvil; el hook solo las une a la caché, con wallet y cadena en la clave."
