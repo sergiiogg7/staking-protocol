@@ -12,6 +12,7 @@ Material de estudio del frontend, escrito módulo a módulo mientras se construy
 | 5 | Los playgrounds | pendiente |
 | 6 | Un clic de punta a punta, visto en la pestaña Network | pendiente |
 | 7 | Las posiciones: datos derivados de eventos, funciones puras y un hook fino | hecho |
+| 8 | Las acciones: simular, firmar, esperar y la máquina de estados | hecho |
 
 ---
 
@@ -652,3 +653,76 @@ La posición #2 muestra **11.25 ETH reclamables** con **1.98 ETH** en el contrat
 ### Frase de entrevista
 
 "Como el NFT no es enumerable, reconstruyo las posiciones desde los eventos `Transfer` recibidos y las verifico con `ownerOf`, porque un log solo prueba que se recibió el token. La lógica son funciones puras que probé contra Anvil; el hook solo las une a la caché, con wallet y cadena en la clave."
+
+---
+
+## Módulo 8: las acciones (depositar, reclamar y retirar)
+
+### Una escritura no es una lectura con otro nombre
+
+Tarda, la aprueba una persona y puede fallar de varias formas. Por eso cada acción tiene un **estado explícito**:
+
+```
+ idle ──clic──► pending ──la wallet firma──► confirming ──minada──► success
+                  │ (simulación o firma fallan)       │ (revierte en cadena)
+                  └──────────────► error ◄────────────┘
+```
+
+| Fase | Qué ocurre | Mensaje |
+|---|---|---|
+| `pending` | simulamos y esperamos la firma | "confirm in your wallet…" |
+| `confirming` | enviada, falta que se mine | "Waiting for confirmation…" y el hash |
+| `success` / `error` | resultado | "Done." o el error en lenguaje humano |
+
+### Las capas
+
+| Pieza | Responsabilidad |
+|---|---|
+| `lib/errors.ts` | `describeError`: un error de viem → una frase |
+| `lib/transactions.ts` | `deposit`, `claimRewards`, `withdrawTokens`: **simular → firmar → esperar el recibo** |
+| `hooks/useTransaction.ts` | la máquina de estados y el refresco de la caché |
+| `hooks/useStakingActions.ts` | un hook por acción (`useDeposit`, `useClaim`, `useWithdraw`) |
+| componentes | `DepositPanel`, `PositionActions`, `TransactionStatus` |
+
+### Simular antes de firmar
+
+`simulateContract` ejecuta la llamada como una lectura. Si va a revertir, falla **antes** de que la wallet pida la firma: el usuario no paga gas por algo condenado. En las pruebas, un claim prematuro devolvió "Too early to claim: 88 more seconds" sin enviar nada.
+
+### El depósito son dos transacciones
+
+El token debe permitir antes que `StakingApp` mueva el STK (`approve`), y después se llama a `depositToken`. El `approve` es por el **importe exacto**, nunca ilimitado: si `StakingApp` tuviera un fallo, no podría vaciar la wallet. Si ya había permiso suficiente, se salta el primer paso. La acción avisa de cada paso con `progress.step(...)` y el estado vuelve a `pending` para la segunda firma.
+
+### Traducir errores
+
+Un revert llega envuelto en varias capas de errores de viem. `describeError` las recorre con `walk`, busca el `ContractFunctionRevertedError` y lo decodifica contra los ABIs de **los tres contratos** (un error del NFT o del token ocurre dentro de una llamada a `StakingApp`). También reconoce `UserRejectedRequestError`: el usuario cancela en la wallet.
+
+| Error del contrato | Mensaje |
+|---|---|
+| `StakingPeriodNotElapsed(remaining)` | Too early to claim: N more seconds… |
+| `NotPositionOwner` | You do not own this position. |
+| `EthTransferFailed` | The contract does not hold enough ETH… |
+| `EnforcedPause` | The protocol is paused… withdrawals still work. |
+| `ERC721NonexistentToken` | This position no longer exists. |
+
+### El primer `useState` real del proyecto
+
+`useTransaction` guarda `phase`, `step`, `hash` y `error` con `useState` (módulo 2). Cada `setX` provoca un nuevo render, y el componente pinta lo que dice la fase. Al terminar, invalida las consultas `["myPositions"]` y `["balance"]` (módulo 3): la caché sabe que lo leído antes ya está viejo y vuelve a pedirlo.
+
+### Dos cuidados de la interfaz
+
+- **Aviso de balance insuficiente**: un claim paga el importe completo o revierte. Si `claimable > balance del contrato`, `PositionActions` avisa y desactiva `Claim`. Es el caso real medido (11.25 ETH devengados frente a 1.98 ETH).
+- **Todos los hooks antes del `return` temprano** de `DepositPanel`: las reglas de los hooks (módulo 3).
+
+### Qué se probó
+
+Con transacciones reales contra Anvil y una wallet simulada: claim sin ETH suficiente, depósito en dos pasos, claim prematuro, claim desde otra cuenta, retiro y rechazo en la wallet. Cada caso devolvió su mensaje. Lo que **no** se ha podido probar es el flujo en un navegador con una wallet real.
+
+### Preguntas de control
+
+1. ¿Por qué se simula antes de pedir la firma y qué le ahorra al usuario?
+2. ¿Por qué el `approve` es por el importe exacto y no ilimitado?
+3. ¿Por qué `describeError` decodifica contra los tres ABIs y no solo el de `StakingApp`?
+
+### Frase de entrevista
+
+"Cada acción pasa por simular, firmar y esperar el recibo, con un estado explícito (idle, pending, confirming, success, error). Simulo antes para que un revert conocido no cueste gas, aprobo el importe exacto y traduzco los custom errors decodificándolos contra los tres contratos. Lo probé con transacciones reales contra Anvil."
