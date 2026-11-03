@@ -176,9 +176,9 @@ StakingApp   : (pendiente)
 
 ### Ruta `/activity` — Protocol Activity
 
-- 🔲 Tabla de eventos: `DepositTokens`, `WithdrawTokens`, `RewardsClaimed`, `EtherSent`, `EtherWithdrawn`
-- 🔲 Filtro por wallet (por defecto filtra la wallet conectada, opción "ver todo")
-- 🔲 Chainlink ETH/USD feed para mostrar valor en USD de cada reward claim
+- ✅ Tabla de eventos: `DepositTokens`, `WithdrawTokens`, `RewardsClaimed`, `EtherSent`, `EtherWithdrawn` (`lib/activity.ts`, `useActivity`, `ActivityTable`, `ActivityPage`). Verificada contra los 11 eventos reales de Anvil, ordenados de más reciente a más antiguo y con la fecha de cada bloque
+- ✅ Filtro por wallet ("All activity" / "My activity", con la dirección `indexed` de cada evento; los eventos del owner solo salen en "All"). Por defecto muestra toda la actividad, porque "mine" exige wallet conectada
+- 🔲 Chainlink ETH/USD feed para mostrar valor en USD de cada reward claim (solo se puede probar en Sepolia: Anvil no tiene el feed)
 
 ### Ruta `/admin` — Owner Panel
 
@@ -237,3 +237,4 @@ StakingApp   : (pendiente)
 | 2026-11-03 | 3 | Posiciones de la wallet reconstruidas desde los eventos `Transfer` y verificadas con `ownerOf` (`lib/positions.ts`, `useMyPositions`, `PositionsList`) |
 | 2026-11-03 | 3 | Acciones: deposit (approve por el importe exacto y `depositToken`), claim y withdraw con simular → firmar → esperar el recibo, máquina de estados `useTransaction`, errores de los tres contratos traducidos, aviso y bloqueo de `Claim` si el contrato no tiene ETH suficiente |
 | 2026-11-03 | 3 | Imagen del NFT desde `tokenURI` tratada como contenido no confiable. React Router (`/` y `/admin`, `Layout` con `NavLink` y `Outlet`). Panel `/admin` completo: estado del contrato, pausar o reanudar, enviar ETH, `withdrawEther` con el motivo del bloqueo, parámetros inmutables. `describeError` reconoce también el revert de una transacción simple. Pendiente al desplegar: reescritura de rutas a `index.html` (Vercel) para que `/admin` funcione al recargar |
+| 2026-11-03 | 3 | Ruta `/activity`: tabla de eventos del protocolo (`getContractEvents` por evento, fechas de los bloques) con filtro "All / My activity". Falta el feed de Chainlink, que requiere Sepolia |

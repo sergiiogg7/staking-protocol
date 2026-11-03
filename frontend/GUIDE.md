@@ -15,6 +15,7 @@ Material de estudio del frontend, escrito módulo a módulo mientras se construy
 | 8 | Las acciones: simular, firmar, esperar y la máquina de estados | hecho |
 | 9 | Contenido no confiable: la imagen del NFT | hecho |
 | 10 | Rutas y el panel de admin | hecho |
+| 11 | El historial de eventos: `/activity` | hecho |
 
 ---
 
@@ -813,3 +814,46 @@ Rutas con un enrutador en memoria: el enlace activo cambia y cada página muestr
 ### Frase de entrevista
 
 "Las rutas son una tabla que decide qué componente pintar dentro de un layout común, sin pedir páginas al servidor. El panel de admin solo lo ve el owner, pero eso es comodidad: la seguridad la impone `onlyOwner` en el contrato, y lo comprobé enviando acciones de owner desde una cuenta normal."
+
+---
+
+## Módulo 11: el historial de eventos (`/activity`)
+
+### De dónde sale el historial
+
+Un contrato no guarda una lista de lo que ha pasado: lo **emite como eventos**, que quedan en los registros (*logs*) de la cadena. Leerlos es barato (no es una llamada al contrato) y es la fuente natural de una pantalla de actividad.
+
+```
+ getContractEvents(DepositTokens)   ┐
+ getContractEvents(WithdrawTokens)  │  una consulta por evento (cada uno tiene argumentos distintos)
+ getContractEvents(RewardsClaimed)  │
+ getContractEvents(EtherSent)       │
+ getContractEvents(EtherWithdrawn)  ┘
+            │ se unen en una lista de ActivityItem, se piden las fechas y se ordena
+            ▼
+ ActivityTable   (solo pinta: Date, Event, Wallet, Position, Amount, Transaction)
+```
+
+### Detalles que importan
+
+- **Filtrar por wallet usa el argumento `indexed`** de cada evento. Ese argumento se llama `userAddress_` en dos eventos y `user_` en otro, por eso hay una consulta por evento. `EtherSent` y `EtherWithdrawn` **no tienen dirección indexed**, así que solo salen en "All activity".
+- **Un log trae el número de bloque, no la fecha.** Se piden una sola vez los bloques distintos (`getBlock`) y se asigna la fecha a cada evento.
+- **Los intentos fallidos no aparecen**: una transacción revertida no emite eventos. Es una propiedad útil, y un límite: el historial no dice quién lo intentó.
+- **Orden**: más reciente primero, por bloque y por posición del log dentro del bloque.
+- **`key` de las filas**: `hash-índice del log`, que es único (una transacción puede emitir varios eventos).
+- **La clave de caché incluye el ámbito y la wallet**, así que "mine" y "all" son entradas distintas, y tras cualquier acción se invalida `["activity"]`.
+- En una red real los logs se leen desde el bloque de despliegue, no desde el 0, y a gran escala eso lo hace un indexador.
+
+### Qué se comprobó
+
+Contra Anvil: **11 eventos** (los 2 ETH iniciales, depósitos, claims y retiros de tres cuentas y los 0.5 ETH financiados), de más reciente a más antiguo. Filtrando por la cuenta #1 salen 5, sin los eventos del owner. La página completa muestra las tres rutas en el menú y el botón activo.
+
+### Preguntas de control
+
+1. ¿Por qué hay una consulta por evento y no una sola para todo el historial de una wallet?
+2. ¿Por qué un log no basta para mostrar la fecha y qué se hace?
+3. ¿Por qué no aparece en el historial una transacción que revirtió?
+
+### Frase de entrevista
+
+"El historial sale de los eventos del contrato, una consulta por evento porque cada uno indexa su dirección con un nombre distinto. Asigno la fecha pidiendo una vez cada bloque distinto y lo muestro en una tabla de presentación pura. A escala real esto lo haría un indexador."
