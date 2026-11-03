@@ -9,7 +9,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "sync-abis": "node scripts/sync-abis.mjs",
-    "playground:read": "node src/playground/readChain.ts"
+    "playground:read": "node src/playground/readChain.ts",
+    "playground:write": "node src/playground/writeChain.ts"
   },
   "dependencies": {
     "react": "^19.3.1",
