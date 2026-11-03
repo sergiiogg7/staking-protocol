@@ -1,10 +1,14 @@
 import { formatEther, formatUnits } from "viem";
-import { useAccount } from "wagmi";
+import { useAccount, useBalance } from "wagmi";
+import { localAddresses } from "../contracts.ts";
 import { useMyPositions } from "../hooks/useMyPositions.ts";
+import { PositionActions } from "./PositionActions.tsx";
 
 export function PositionsList() {
   const { isConnected } = useAccount();
   const { data: positions, isPending, error } = useMyPositions();
+  // The ETH the contract can pay rewards with: a claim larger than this is bound to fail.
+  const { data: contractBalance } = useBalance({ address: localAddresses.stakingApp });
 
   // Order matters: a query that is disabled (no wallet) also reports isPending, so check the wallet first.
   if (!isConnected) return <p>Connect your wallet to see your positions.</p>;
@@ -21,6 +25,7 @@ export function PositionsList() {
           <span>Staked {formatUnits(position.depositAmount, 18)} STK</span>
           <span>Since {new Date(Number(position.depositTimestamp) * 1000).toLocaleString()}</span>
           <span>Claimable {formatEther(position.claimable)} ETH</span>
+          <PositionActions position={position} contractBalance={contractBalance?.value} />
         </li>
       ))}
     </ul>

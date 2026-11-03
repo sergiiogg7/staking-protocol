@@ -1,4 +1,5 @@
 import { ConnectButton } from "./components/ConnectButton.tsx";
+import { DepositPanel } from "./components/DepositPanel.tsx";
 import { PositionsList } from "./components/PositionsList.tsx";
 import { ProtocolStats } from "./components/ProtocolStats.tsx";
 
@@ -11,6 +12,7 @@ export default function App() {
       </header>
       <ProtocolStats />
       <h2>My positions</h2>
+      <DepositPanel />
       <PositionsList />
     </main>
   );
