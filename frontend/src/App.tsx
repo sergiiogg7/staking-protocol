@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router";
 import { Layout } from "./components/Layout.tsx";
+import { ActivityPage } from "./pages/ActivityPage.tsx";
 import { AdminPage } from "./pages/AdminPage.tsx";
 import { PositionsPage } from "./pages/PositionsPage.tsx";
 
@@ -9,6 +10,7 @@ export default function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<PositionsPage />} />
+        <Route path="activity" element={<ActivityPage />} />
         <Route path="admin" element={<AdminPage />} />
       </Route>
     </Routes>

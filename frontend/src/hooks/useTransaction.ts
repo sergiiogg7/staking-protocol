@@ -40,6 +40,8 @@ export function useTransaction<Variables = void>(run: (variables: Variables, pro
       await queryClient.invalidateQueries({ queryKey: ["balance"] });
       // Contract reads such as the paused flag or the number of open positions.
       await queryClient.invalidateQueries({ queryKey: ["readContracts"] });
+      // The action emitted an event, so the activity log has a new entry.
+      await queryClient.invalidateQueries({ queryKey: ["activity"] });
     } catch (caught) {
       setError(describeError(caught));
       setPhase("error");
